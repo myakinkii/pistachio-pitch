@@ -36,7 +36,7 @@ test("an illegal command gets one repair round, and the turn always ends", async
 });
 
 import { duelOdds, analyze } from "../src/ai/odds.ts";
-import { advisorTurn } from "../src/ai/advisor.ts";
+import { advisorTurn, suggestTurn } from "../src/ai/advisor.ts";
 import { botTurn } from "../src/ai/bot.ts";
 
 test("duel odds are exact", () => {
@@ -59,4 +59,22 @@ test("following the advice attacks: the advisor outscores the bot", () => {
     mine += m.state.score.K; theirs += m.state.score.S;
   }
   assert.ok(mine > theirs && mine >= 3, `advisor ${mine} : ${theirs} bot`);
+});
+
+test("a plan that leaves AP unused gets a follow-up, and the prompt carries a default plan", async () => {
+  const m = new Match({ seed: "follow" });
+  const prompts: string[] = [];
+  const replies = [{ commands: ["#4+"] }, { commands: ["#5+", "#5+", "/"] }];
+  const r = await coachTurn({ match: m, ask: async p => { prompts.push(p); return replies.shift()!; } });
+  assert.equal(prompts.length, 2);
+  assert.match(prompts[0], /A DEFAULT PLAN[\s\S]*would play: #/);
+  assert.match(prompts[1], /RAN OUT WITH 6 AP LEFT/);
+  assert.deepEqual(r.played, ["#4+", "#5+", "#5+", "/"]);
+});
+
+test("the default plan doesn't see the real dice", () => {
+  const s = new Match({ seed: "dice" }).state;
+  const real = s.rng;
+  suggestTurn(s);
+  assert.equal(s.rng, real);
 });

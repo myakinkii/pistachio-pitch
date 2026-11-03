@@ -66,12 +66,16 @@ short playbook (with the ball, progress every turn and shoot when the odds are
 decent; without it, press and tackle, then reserves), the position, and its
 options worked out with exact odds from the dice: shots with the chance of a
 goal, passes and through balls with the chance they arrive, dribbles with the
-chance of keeping the ball, runs into space, tackles. It answers with a plan for
-the whole turn as commands, plus a one-line idea shown after its turn.
+chance of keeping the ball, runs into space, tackles. It also gets a default plan: the
+turn the advisor would play, simulated on different dice so it reveals nothing
+about the real rolls. It answers with a plan for the whole turn as commands,
+plus a one-line idea shown after its turn; if the plan leaves AP unused, it gets
+one follow-up. Tick "Auto-play AI sides" to have Claude play turn after turn
+(one request per turn; any problem switches auto-play off).
 The engine plays them in order and resolves every contest with dice; if a
 command turns out illegal, Claude gets the error and one chance to re-plan.
 It runs on the viewer's own Claude account and asks for permission the first
-time. Calls only happen when you press the button.
+time. Calls only happen when you press the button or turn auto-play on.
 
 The logic is in `src/ai/coach.ts` and doesn't depend on the page or a model:
 the CLI uses the same code with the Anthropic API.

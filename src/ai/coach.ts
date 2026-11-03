@@ -11,6 +11,7 @@ import {
   RuleError, NotationError, type State, type Match, type TeamId,
 } from "../engine/index.ts";
 import { analyze, goalDist } from "./odds.ts";
+import { suggestTurn } from "./advisor.ts";
 
 export type Ask = (prompt: string) => Promise<string | unknown>;
 
@@ -60,10 +61,16 @@ With the ball:
 - Use forwards (#10, #11) as targets near the goal, midfielders to carry and pass. Keep 1-2 AP for
   reserves on defenders near the ball only if you're at risk of losing it.
 Without the ball:
-- Press: send the nearest one or two players into the carrier's spot and tackle (the more of the
-  spot's segments you hold, the better your odds). A tie knocks it loose; walk onto it to win it.
-- Then put leftover AP on reserves for players next to the ball and in front of your goal: they press
-  his next dribble and pounce on loose balls.
+- Don't throw players at the ball one by one. A one-on-one tackle against a forward is usually below
+  30%, and a lost tackle wastes the player for the turn. Tackle when the odds say 35%+: DOUBLE UP first
+  (a second player into the same spot gives +1), and tackle with defenders and midfielders.
+- Keep your shape. Your four defenders (#2-#5) are the last line: keep most of them between the ball
+  and your goal instead of chasing. Use the "block the pass" options to stand in the lanes to their
+  forwards, and keep the forwards (#10, #11) higher up the pitch, ready for the counter.
+- Put leftover AP on reserves for players next to the ball and in front of your goal: they press his
+  next dribble, stretch for passes, and pounce on loose balls. Reserves are how you defend in his turn.
+Always:
+- Use all your AP. Ending a turn early throws AP away; if nothing else is useful, reserves are.
 - Late in the match, if you're behind, attack with more players; if you're ahead, keep it safe.`;
 
 /** The position in text: score, ball, every player with their segment (+ = reserves). */
@@ -98,6 +105,14 @@ export function options(s: State): string {
   return lines.join("\n");
 }
 
+/** The advisor's turn (top-rated option every time) as a baseline for the model to follow or beat. */
+function suggested(s: State): string {
+  const plan = suggestTurn(s);
+  return plan.length
+    ? `A simple advisor that always takes the top-rated option would play: ${plan.join(" ")}\n(It doesn't know the dice either; with the real rolls it may stop early.) Follow it, or do better.`
+    : "(no suggestion)";
+}
+
 export function coachPrompt(m: Match, extra = ""): string {
   const s = m.state;
   const recent = m.toFile().turns.slice(-4).map(t => `${t.no}${t.team}. ` + t.entries.map(e => e.cmd + (e.result ? `{${e.result}}` : "")).join(" ")).join("\n");
@@ -113,6 +128,9 @@ ${describe(s)}
 
 === YOUR OPTIONS ===
 ${options(s)}
+
+=== A DEFAULT PLAN ===
+${suggested(s)}
 ${extra}
 Plan this turn following the playbook. Options marked "then" are two commands. The odds are for
 the position as it is now; after your first commands the picture changes, so order them well.
@@ -163,8 +181,11 @@ export async function coachTurn({ match, ask, repairs = 1 }: { match: Match; ask
         break;
       }
     }
-    if (!failed) break;
-    extra = `\n=== YOUR LAST PLAN STOPPED ===\nThese were played: ${played.join(" ") || "(none)"}\nThen "${failed}". Plan the rest of the turn from the position above.\n`;
+    if (failed) {
+      extra = `\n=== YOUR LAST PLAN STOPPED ===\nThese were played: ${played.join(" ") || "(none)"}\nThen "${failed}". Plan the rest of the turn from the position above.\n`;
+    } else if (live() && match.state.ap >= 2 && !plan.commands.includes("/")) {
+      extra = `\n=== YOUR PLAN RAN OUT WITH ${match.state.ap} AP LEFT ===\nThese were played: ${played.join(" ")}\nSpend the rest of this turn from the position above.\n`;
+    } else break;
   }
   if (live()) played.push(match.play("/").text);
   return { played, note, idea, errors };

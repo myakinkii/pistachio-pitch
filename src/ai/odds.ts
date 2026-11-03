@@ -138,16 +138,61 @@ export function analyze(s: State): { summary: string; options: Option[] } {
       }
     }
   } else if (c) {
-    // Defending: who can get to the carrier, and the odds of the tackle
-    for (const m of mine) {
-      const inIt = hexOf(m) === bh;
-      const { cost } = reach(s, m, Math.max(0, s.ap - 1));
-      const k = inIt ? 0 : Math.min(...hexSegs(bh).map(x => cost.get(x) ?? Infinity));
-      if (k === Infinity || s.beaten.includes(m.id)) continue;
+    // Defending. Tackling one-on-one is usually a bad bet (a forward dribbles 4, most players tackle 2-3),
+    // so the options also offer doubling up for the majority bonus, and blocking his passing lanes.
+    const reachTo = (m: Player, budget: number) => {
+      if (hexOf(m) === bh) return { k: 0, seg: m.seg };
+      const { cost } = reach(s, m, Math.max(0, budget));
+      const segs = hexSegs(bh).filter(x => cost.has(x)).sort((a, b) => cost.get(a)! - cost.get(b)! || a - b);
+      return segs.length ? { k: cost.get(segs[0])!, seg: segs[0] } : null;
+    };
+    const fresh = mine.filter(m => !s.beaten.includes(m.id));
+    for (const m of fresh) {
+      const r = reachTo(m, s.ap - 1);
+      if (!r) continue;
+      const inIt = r.k === 0;
       const o = duelOdds(m.st.tack + majority(s, bh, team, inIt ? [] : [m]), c.st.drib);
-      const seg = inIt ? m.seg : hexSegs(bh).filter(x => cost.get(x) === k).sort((a, b) => a - b)[0];
-      opts.push({ kind: "press", cmd: inIt ? `#${m.num}x#${c.num}` : `#${m.num}-${segName(seg)} then #${m.num}x#${c.num}`, score: (o.win + o.tie * 0.5) * 6 + 1 - k * 0.2,
-        text: `${inIt ? "tackle" : "close down and tackle"} ${inIt ? `#${m.num}x#${c.num}` : `#${m.num}-${segName(seg)} (${k} AP) then #${m.num}x#${c.num}`}: wins it ${pct(o.win)}, knocks it loose ${pct(o.tie)}` });
+      opts.push({ kind: "press", cmd: inIt ? `#${m.num}x#${c.num}` : `#${m.num}-${segName(r.seg)} then #${m.num}x#${c.num}`,
+        score: (o.win + o.tie * 0.5) * 6 + 0.5 - r.k * 0.35,
+        text: `${inIt ? "tackle" : "close down and tackle"} ${inIt ? `#${m.num}x#${c.num}` : `#${m.num}-${segName(r.seg)} (${r.k} AP) then #${m.num}x#${c.num}`}: wins it ${pct(o.win)}, knocks it loose ${pct(o.tie)}` });
+    }
+    // Double up: a second player into the spot first, then the better tackler goes in with +1.
+    const helpers = fresh.map(m => ({ m, r: reachTo(m, s.ap - 2) })).filter(x => x.r && x.r.k > 0) as { m: Player; r: { k: number; seg: number } }[];
+    const inSpot = fresh.filter(m => hexOf(m) === bh);
+    const pairs: { a: Player; b: Player; cmds: string[]; k: number }[] = [];
+    for (const t of inSpot) for (const h of helpers) pairs.push({ a: t, b: h.m, cmds: [`#${h.m.num}-${segName(h.r.seg)}`, `#${t.num}x#${c.num}`], k: h.r.k });
+    for (const h1 of helpers) for (const h2 of helpers) {
+      if (h1.m === h2.m || h1.r.seg === h2.r.seg || h1.r.k + h2.r.k + 1 > s.ap || h1.m.st.tack < h2.m.st.tack) continue;
+      pairs.push({ a: h1.m, b: h2.m, cmds: [`#${h2.m.num}-${segName(h2.r.seg)}`, `#${h1.m.num}-${segName(h1.r.seg)}`, `#${h1.m.num}x#${c.num}`], k: h1.r.k + h2.r.k });
+    }
+    for (const pr of pairs) {
+      const extra = [pr.a, pr.b].filter(x => hexOf(x) !== bh);
+      const maj = majority(s, bh, team, extra);
+      if (!maj) continue;
+      const o = duelOdds(pr.a.st.tack + 1, c.st.drib);
+      opts.push({ kind: "double", cmd: pr.cmds.join(" then "), score: (o.win + o.tie * 0.5) * 6 - pr.k * 0.4,
+        text: `double up: ${pr.cmds.join(", ")} (${pr.k + 1} AP): with the majority, wins it ${pct(o.win)}, knocks it loose ${pct(o.tie)}` });
+    }
+    // Block the lane: step into the line of his best forward passes, so the pass can be cut out.
+    const theirTargets = s.players.filter(x => x.team === c.team && x !== c && hexDist(bh, hexOf(x)) <= 5)
+      .map(x => ({ x, gain: ownGoalDist(team, bh) - ownGoalDist(team, hexOf(x)) }))
+      .filter(t => t.gain >= 1).sort((a, b) => b.gain - a.gain || a.x.num - b.x.num).slice(0, 3);
+    for (const { x: t, gain } of theirTargets) {
+      const th = hexOf(t);
+      if (laneThreats(s, c.team, bh, th).some(z => !z.react)) continue; // already covered
+      let best: { m: Player; seg: number; k: number } | null = null;
+      for (const m of mine.filter(z => z.role !== "GK")) {
+        const { cost } = reach(s, m, Math.min(3, s.ap));
+        for (const [seg, k] of cost) {
+          if (best && k >= best.k) continue;
+          const old = m.seg; m.seg = seg;
+          const blocks = laneThreats(s, c.team, bh, th).some(z => z.p === m && !z.react);
+          m.seg = old;
+          if (blocks) best = { m, seg, k };
+        }
+      }
+      if (best) opts.push({ kind: "block", cmd: `#${best.m.num}-${segName(best.seg)}`, score: gain * 0.6 + 0.5 - best.k * 0.2,
+        text: `block the pass to ${t.id} (${gain} spots nearer your goal): #${best.m.num}-${segName(best.seg)} (${best.k} AP) stands in that lane` });
     }
     // Reserve spots: players next to the ball
     const near = mine.filter(m => hexDist(hexOf(m), bh) <= 1 && m.reserve < 2).map(m => `#${m.num}+`);
@@ -161,7 +206,7 @@ export function analyze(s: State): { summary: string; options: Option[] } {
   }
 
   const top: Option[] = [];
-  for (const kind of ["shot", "pass", "through", "dribble", "run", "press", "reserve", "loose"]) {
+  for (const kind of ["shot", "pass", "through", "dribble", "run", "double", "press", "block", "reserve", "loose"]) {
     top.push(...opts.filter(o => o.kind === kind).sort((a, b) => b.score - a.score || a.cmd.localeCompare(b.cmd)).slice(0, kind === "shot" ? 3 : 5));
   }
   const best = opts.slice().sort((a, b) => b.score - a.score)[0];

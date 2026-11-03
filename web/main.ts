@@ -177,11 +177,21 @@ function playLocalAi() {
   if (match.state.turn !== t || match.state.turnNo !== n) aiQueue = [];
 }
 
-/** Run the AI for the side to move when that side is a bot (auto-play) — Claude always waits for a click. */
+/**
+ * With auto-play on, run the side to move when it's an AI side. Claude sides make
+ * one request per turn, one at a time; any problem switches auto-play off.
+ */
+const autoOn = () => ($("autoAi") as HTMLInputElement).checked;
+const autoOff = () => { ($("autoAi") as HTMLInputElement).checked = false; };
 function schedule() {
   if (botTimer) { clearTimeout(botTimer); botTimer = null; }
-  if (!live() || aiBusy) return;
-  if (isLocalAi(sides[match.state.turn]) && ($("autoAi") as HTMLInputElement).checked) botTimer = setTimeout(botStep, 320);
+  if (!live() || aiBusy || !autoOn()) return;
+  const side = sides[match.state.turn];
+  if (isLocalAi(side)) botTimer = setTimeout(botStep, 320);
+  else if (side === "claude" && sampleOk) botTimer = setTimeout(() => {
+    botTimer = null;
+    if (live() && !aiBusy && autoOn() && sides[match.state.turn] === "claude") claudeTurn();
+  }, 900);
 }
 function botStep() {
   botTimer = null;
@@ -223,6 +233,7 @@ async function claudeTurn() {
     save();
   } catch (e) {
     const code = (e as { code?: string }).code;
+    autoOff();
     if (code === "cancelled" || (e as Error).message === "stopped") setAiNote("Stopped. The turn continues from where it was.");
     else if (code === "not_granted" || code === "sampling_disabled") { sampleOk = false; setAiNote("Claude wasn’t allowed for this page, so Claude sides are off."); }
     else if (code === "rate_limited") setAiNote("Claude is busy right now. Try again in a little while.");
@@ -399,7 +410,7 @@ $("aiBtn").addEventListener("click", () => {
   if (aiBusy || !live()) return;
   if (sides[match.state.turn] === "claude") claudeTurn(); else botTurnAnimated();
 });
-$("aiStop").addEventListener("click", () => aiBusy?.abort());
+$("aiStop").addEventListener("click", () => { autoOff(); aiBusy?.abort(); });
 for (const t of ["K", "S"] as TeamId[]) {
   $(`side${t}`).addEventListener("change", e => {
     const v = (e.target as HTMLSelectElement).value as Side;
