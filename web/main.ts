@@ -248,12 +248,13 @@ const setAiNote = (t: string) => { $("aiNote").textContent = t; };
 function pieceSvg(p: Player, mine: boolean, selected: boolean, threat: boolean) {
   const c = segCentroid(p.seg), a = 30 + 60 * (p.seg % 6);
   const jit = ((p.num * 37 + (p.team === "K" ? 0 : 13)) % 17) - 8, rot = a - 90 + jit;
+  // A contrasting halo (white round the green kernels, dark round the pale shells) keeps them visible on every colour.
   const body = p.team === "K"
-    ? `<ellipse rx="8" ry="11.5" fill="url(#kernelG)" stroke="#3a2a2e" stroke-width="1"/><path d="M-2.5 -8 Q-5.5 0 -1.5 8" stroke="rgba(255,255,255,.35)" stroke-width="1.5" fill="none"/>`
-    : `<ellipse rx="8.4" ry="12" fill="url(#shellG)" stroke="#8a7249" stroke-width="1"/><path d="M.7 -11.5 Q3 0 .7 11.5" stroke="#9c8558" stroke-width=".9" fill="none"/>`;
-  const ring = selected ? `<ellipse rx="12" ry="15.5" class="ring-sel"/>` : threat ? `<ellipse rx="12" ry="15.5" class="threat"/>` : "";
-  const res = p.reserve ? Array.from({ length: p.reserve }, (_, i) => `<circle class="reserve" cx="${(8 + i * 6).toFixed(1)}" cy="-11" r="2.6"/>`).join("") : "";
-  return `<g class="piece${mine ? " mine" : ""}" data-act="piece" data-id="${p.id}"${mine ? ' tabindex="0"' : ""} aria-label="${name(p)}" transform="translate(${c.x.toFixed(1)} ${c.y.toFixed(1)}) rotate(${rot})">${ring}<g filter="url(#drop)">${body}</g>${res}<text y="3" class="num ${p.team}" transform="rotate(${-rot})">${p.num}</text></g>`;
+    ? `<ellipse rx="10" ry="14" class="halo K"/><ellipse rx="9" ry="13" fill="url(#kernelG)" stroke="#2a1f22" stroke-width="1.5"/><path d="M-2.8 -9 Q-6.2 0 -1.7 9" stroke="rgba(255,255,255,.4)" stroke-width="1.7" fill="none"/>`
+    : `<ellipse rx="10.4" ry="14.4" class="halo S"/><ellipse rx="9.4" ry="13.4" fill="url(#shellG)" stroke="#6b5430" stroke-width="1.5"/><path d="M.8 -12.8 Q3.4 0 .8 12.8" stroke="#8a7146" stroke-width="1.1" fill="none"/>`;
+  const ring = selected ? `<ellipse rx="13.5" ry="17.5" class="ring-sel"/>` : threat ? `<ellipse rx="13.5" ry="17.5" class="threat"/>` : "";
+  const res = p.reserve ? Array.from({ length: p.reserve }, (_, i) => `<circle class="reserve" cx="${(9 + i * 6).toFixed(1)}" cy="-12" r="2.8"/>`).join("") : "";
+  return `<g class="piece${mine ? " mine" : ""}" data-act="piece" data-id="${p.id}"${mine ? ' tabindex="0"' : ""} aria-label="${name(p)}" transform="translate(${c.x.toFixed(1)} ${c.y.toFixed(1)}) rotate(${rot})">${ring}<g filter="url(#drop)">${body}</g>${res}<text y="3.4" class="num ${p.team}" transform="rotate(${-rot})">${p.num}</text></g>`;
 }
 
 function renderBoard() {
@@ -426,6 +427,14 @@ function toggleCoords() {
   coordBtn.textContent = off ? "Show coordinates" : "Hide coordinates";
 }
 coordBtn.addEventListener("click", toggleCoords);
+// Pitch colour strength: a per-browser preference.
+const tint = $("tint") as HTMLInputElement;
+function setTint(v: number) { svg.style.setProperty("--tint", String(v / 100)); tint.value = String(v); }
+try { const v = Number(localStorage.getItem("pp-tint")); if (v >= 10 && v <= 100) setTint(v); } catch { /* storage unavailable */ }
+tint.addEventListener("input", () => {
+  setTint(Number(tint.value));
+  try { localStorage.setItem("pp-tint", tint.value); } catch { /* storage unavailable */ }
+});
 document.addEventListener("keydown", e => {
   const tag = (e.target as HTMLElement).tagName;
   if (/INPUT|SELECT|TEXTAREA/.test(tag) || e.ctrlKey || e.metaKey || e.altKey) return;

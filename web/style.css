@@ -63,6 +63,7 @@ button:disabled{opacity:.45;cursor:default;border-color:var(--line)}
 button.strong{font-weight:700;border-color:var(--accent)}
 button:focus-visible,select:focus-visible,summary:focus-visible,input:focus-visible,textarea:focus-visible,.file:focus-within{outline:2.5px solid var(--accent);outline-offset:2px}
 label.ctl{display:flex;align-items:center;gap:6px;font-size:14px;color:var(--muted)}
+.slider input{width:110px;accent-color:var(--accent)}
 .file{font-size:14px;border:1.5px solid var(--line);border-radius:10px;padding:7px 12px;cursor:pointer;background:var(--surface)}
 .file input{position:absolute;width:1px;height:1px;opacity:0}
 textarea{width:100%;font:12.5px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--ink);background:var(--paper);border:1.5px solid var(--line);border-radius:10px;padding:8px;resize:vertical}
@@ -81,7 +82,7 @@ details p{font-size:14px;margin:8px 0}
 
 /* board */
 .sheet{fill:#fbfbf8;filter:drop-shadow(0 3px 8px rgba(0,0,0,.22))}
-.seg{stroke:#161616;stroke-width:1.1;stroke-linejoin:round}
+.seg{stroke:#161616;stroke-width:1.1;stroke-linejoin:round;fill-opacity:var(--tint,1);stroke-opacity:calc(.35 + .65 * var(--tint,1))}
 .hexline{fill:none;stroke:#161616;stroke-width:2.2;stroke-linejoin:round}
 .halfway,.goalline{stroke:#fff;stroke-width:2.5;opacity:.9;stroke-linecap:round}
 .spot{fill:#fff;stroke:#161616;stroke-width:1.3}
@@ -90,10 +91,13 @@ details p{font-size:14px;margin:8px 0}
 .seglet{font:700 7.5px "Atkinson Hyperlegible",system-ui,sans-serif;text-anchor:middle;fill:#fff;paint-order:stroke;stroke:#161616;stroke-width:2;stroke-linejoin:round}
 .no-coords #coordNums,.no-coords #coordLets{display:none}
 .piece.mine{cursor:pointer}
-.num{font:700 8.5px "Atkinson Hyperlegible",system-ui,sans-serif;text-anchor:middle;pointer-events:none}
+.num{font:700 9.5px "Atkinson Hyperlegible",system-ui,sans-serif;text-anchor:middle;pointer-events:none}
 .num.K{fill:#fff;paint-order:stroke;stroke:#2c3a16;stroke-width:1.8}
 .num.S{fill:#4d3d1f}
-.ring-sel{fill:none;stroke:#fff;stroke-width:2.6}
+.ring-sel{fill:none;stroke:#fff;stroke-width:3}
+.halo{fill:none;stroke-width:3.4}
+.halo.K{stroke:#fff}
+.halo.S{stroke:#161616}
 .reserve{fill:#fff;stroke:#161616;stroke-width:1.2}
 .t-move{fill:rgba(255,255,255,.45);stroke:#fff;stroke-width:1.6;stroke-dasharray:3 2;cursor:pointer}
 .t-move:hover{fill:rgba(255,255,255,.85)}
