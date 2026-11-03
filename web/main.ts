@@ -8,6 +8,7 @@ import {
   RuleError, NotationError, formatCommand as fmt, type State, type Player, type TeamId, type Zone, type Entry,
 } from "../src/engine/index.ts";
 import { botCommand } from "../src/ai/bot.ts";
+import { analyze } from "../src/ai/odds.ts";
 import { coachTurn } from "../src/ai/coach.ts";
 import { commentary, type Line } from "../src/commentary.ts";
 
@@ -88,7 +89,8 @@ svg.innerHTML = `<defs>
 const lowG = document.getElementById("low")!, topG = document.getElementById("top")!, ballEl = document.getElementById("ball") as unknown as SVGGElement;
 
 // ---------- state ----------
-type Side = "human" | "bot" | "claude";
+type Side = "human" | "bot" | "advisor" | "claude";
+const isLocalAi = (x: Side) => x === "bot" || x === "advisor";
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const TEAM: Record<TeamId, { name: string; one: string; chip: string }> = {
   K: { name: "Kernels", one: "Kernel", chip: "#7c9d3b" }, S: { name: "Shells", one: "Shell", chip: "#d9c49a" },
@@ -154,17 +156,38 @@ function passText(s: State, p: Player, h: number) {
   return mate ? `#${p.num}>#${mate.num}` : `#${p.num}>${hexName(h)}`;
 }
 
+// The next command for a local AI side. The advisor plays the top-rated option from
+// odds.ts; options like "#10>68 then #11-68" are queued so both halves get played.
+let aiQueue: string[] = [];
+function localAiCommand(): string {
+  const s = match.state;
+  if (sides[s.turn] === "advisor") {
+    if (aiQueue.length) return aiQueue.shift()!;
+    const best = analyze(s).options.slice().sort((a, b) => b.score - a.score || a.cmd.localeCompare(b.cmd))[0];
+    if (!best) return "/";
+    const cmds = best.cmd.split(/ then | /);
+    aiQueue = cmds.slice(1);
+    return cmds[0];
+  }
+  return fmt(botCommand(s));
+}
+function playLocalAi() {
+  const t = match.state.turn, n = match.state.turnNo;
+  if (!play(localAiCommand())) { aiQueue = []; play("/"); }
+  if (match.state.turn !== t || match.state.turnNo !== n) aiQueue = [];
+}
+
 /** Run the AI for the side to move when that side is a bot (auto-play) — Claude always waits for a click. */
 function schedule() {
   if (botTimer) { clearTimeout(botTimer); botTimer = null; }
   if (!live() || aiBusy) return;
-  if (sides[match.state.turn] === "bot" && ($("autoAi") as HTMLInputElement).checked) botTimer = setTimeout(botStep, 320);
+  if (isLocalAi(sides[match.state.turn]) && ($("autoAi") as HTMLInputElement).checked) botTimer = setTimeout(botStep, 320);
 }
 function botStep() {
   botTimer = null;
-  if (!live() || sides[match.state.turn] !== "bot") return;
+  if (!live() || !isLocalAi(sides[match.state.turn])) return;
   const t = match.state.turn, n = match.state.turnNo;
-  play(`${fmt(botCommand(match.state))}`);
+  playLocalAi();
   render();
   if (live() && match.state.turn === t && match.state.turnNo === n) botTimer = setTimeout(botStep, 320);
   else schedule();
@@ -173,7 +196,7 @@ async function botTurnAnimated() {
   const t = match.state.turn, n = match.state.turnNo;
   aiBusy = new AbortController(); render();
   for (let i = 0; i < 40 && live() && match.state.turn === t && match.state.turnNo === n; i++) {
-    play(fmt(botCommand(match.state))); render();
+    playLocalAi(); render();
     await new Promise(r => setTimeout(r, 320));
     if (aiBusy?.signal.aborted) break;
   }
@@ -196,7 +219,7 @@ async function claudeTurn() {
       const e = match.entries[i];
       for (const l of commentary(e.events, match.stateAt(i), match.stateAt(i + 1))) comms.unshift({ ...l, n: e.turnNo, team: e.team });
     }
-    setAiNote(`${r.note ? "Claude: " + r.note + "\n" : ""}Played ${r.played.join(" ")}${r.errors.length ? `\nFixed: ${r.errors.join("; ")}` : ""}`);
+    setAiNote(`${r.idea ? "Idea: " + r.idea + "\n" : ""}${r.note ? "Claude: " + r.note + "\n" : ""}Played ${r.played.join(" ")}${r.errors.length ? `\nFixed: ${r.errors.join("; ")}` : ""}`);
     save();
   } catch (e) {
     const code = (e as { code?: string }).code;
@@ -265,7 +288,7 @@ function hintText(): string {
   if (view !== null) return "Replay. Step through the match, or play on from here.";
   if (s.over) return `Full time. ${TEAM.K.name} ${s.score.K}, ${TEAM.S.name} ${s.score.S}.`;
   if (ui.error) return ui.error;
-  if (sides[s.turn] !== "human") return sides[s.turn] === "bot" ? "The bot is playing this side." : "Claude is coaching this side.";
+  if (sides[s.turn] !== "human") return { bot: "The bot is playing this side.", advisor: "The advisor plays the top-rated option every time.", claude: "Claude is coaching this side." }[sides[s.turn] as "bot"];
   const sel = ui.sel !== null ? playerOf(s, s.turn, ui.sel) : undefined, c = carrier(s);
   if (!sel) return c ? (c.team === s.turn ? `Your #${c.num} has the ball. Select a pistachio to spend actions.` : `${TEAM[c.team].name} have the ball. Select a pistachio to press, or put reserves near the ball.`) : `The ball is loose on spot ${hexName(s.ball.hex)}. Walk a player onto it.`;
   if (c === sel && ui.preview !== null) {
@@ -288,8 +311,9 @@ function hintText(): string {
 function renderPanel() {
   const s = shown();
   $("sK").textContent = String(s.score.K); $("sS").textContent = String(s.score.S);
-  $("nameK").textContent = sides.K === "human" ? "Kernels" : `Kernels (${sides.K === "bot" ? "Bot" : "Claude"})`;
-  $("nameS").textContent = sides.S === "human" ? "Shells" : `Shells (${sides.S === "bot" ? "Bot" : "Claude"})`;
+  const sideName: Record<Side, string> = { human: "", bot: " (Bot)", advisor: " (Advisor)", claude: " (Claude)" };
+  $("nameK").textContent = "Kernels" + sideName[sides.K];
+  $("nameS").textContent = "Shells" + sideName[sides.S];
   $("turnText").innerHTML = s.over ? "Full time" : `<span class="chip" style="background:${TEAM[s.turn].chip}"></span>${TEAM[s.turn].name} to play`;
   $("turnNo").textContent = `Turn ${Math.min(s.turnNo, s.maxTurns)} of ${s.maxTurns}`;
   $("pips").innerHTML = Array.from({ length: s.apPerTurn }, (_, i) => `<span class="pip${i < s.ap ? " full" : ""}"></span>`).join("");
@@ -308,7 +332,7 @@ function renderPanel() {
   $("aiBox").hidden = !showAi && !$("aiNote").textContent;
   ($("aiBtn") as HTMLButtonElement).hidden = !showAi;
   ($("aiBtn") as HTMLButtonElement).disabled = !!aiBusy || (side === "claude" && !sampleOk);
-  $("aiBtn").textContent = side === "claude" ? (sampleOk ? `Ask Claude to play the ${TEAM[s.turn].name}’ turn` : "Claude isn’t available here") : `Play the bot’s turn`;
+  $("aiBtn").textContent = side === "claude" ? (sampleOk ? `Ask Claude to play the ${TEAM[s.turn].name}’ turn` : "Claude isn’t available here") : side === "advisor" ? "Play the advisor’s turn" : "Play the bot’s turn";
   ($("aiStop") as HTMLButtonElement).hidden = !aiBusy;
   // notation and commentary
   const ta = $("ppn") as HTMLTextAreaElement;

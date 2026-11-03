@@ -30,8 +30,11 @@ to work on it.
   replayed wrong.
 - Notation changes go in `notation.ts` and `docs/notation.md` together, and
   keep old files readable.
-- The coach prompt (`src/ai/coach.ts`) explains the rules to the model: update
-  it when the rules change.
+- The coach prompt (`src/ai/coach.ts`) explains the rules to the model, and
+  `src/ai/odds.ts` repeats the dice formulas from `rules.ts` to compute exact
+  chances: update both when the rules change. The test "following the advice
+  attacks" checks the analysis still leads somewhere (the advisor must outscore
+  the bot).
 - `web/` must stay one self-contained file after `npm run build`: no CDN at run
   time except Google Fonts (allowed in artifacts), no network calls.
 

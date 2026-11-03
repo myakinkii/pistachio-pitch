@@ -7,10 +7,10 @@
 // error and the new position and may answer once more.
 
 import {
-  HEXES, attackGoal, hexDist, segHex, segName, hexName, hexOf,
-  reach, passTargets, laneThreats, inHex, carrier, PASS_RANGE, MAX_RESERVE,
+  segName, hexName, hexOf, PASS_RANGE, MAX_RESERVE,
   RuleError, NotationError, type State, type Match, type TeamId,
 } from "../engine/index.ts";
+import { analyze, goalDist } from "./odds.ts";
 
 export type Ask = (prompt: string) => Promise<string | unknown>;
 
@@ -40,7 +40,31 @@ Each turn your side has a pool of action points (AP) to spend on any players:
 - / ends the turn early. Losing the ball through your own action ends your turn at once.
 
 Stats (1-5): keepers are good at keeping, defenders at tackling, midfielders at passing and control,
-forwards at dribbling and shooting. Rolls are d6 + stat (+ bonuses); higher wins.`;
+forwards at dribbling and shooting. Rolls are d6 + stat (+ bonuses); higher wins.
+
+Direction: spot numbers grow by 9 per row going down the pitch. Kernels attack downwards (towards
+higher numbers), Shells upwards (towards lower numbers). "N from goal" in the options counts spots
+to the goal you attack.
+
+=== PLAYBOOK ===
+You win by scoring. A 0-0 is a failure for both coaches. Every turn with the ball should move it
+clearly closer to goal or end in a shot; a turn spent only on reserves while you have the ball is wasted.
+With the ball:
+- Progress first. Prefer, in this order: a shot with a good chance (30%+ is worth it inside 4 spots,
+  taking it beats keeping the ball near goal); a forward pass that arrives 70%+; a dribble into an
+  empty spot closer to goal; a run by a teammate into space ahead, then a pass to him.
+- Chain actions: move or dribble, then pass, then the receiver moves on. Several short safe steps
+  beat one long risky one, but don't pass backwards and sideways all turn.
+- Avoid passing or dribbling into spots with opponents unless the odds say it's fine. Losing the ball
+  ends your turn, so play the risky action last, after the safe progress.
+- Use forwards (#10, #11) as targets near the goal, midfielders to carry and pass. Keep 1-2 AP for
+  reserves on defenders near the ball only if you're at risk of losing it.
+Without the ball:
+- Press: send the nearest one or two players into the carrier's spot and tackle (the more of the
+  spot's segments you hold, the better your odds). A tie knocks it loose; walk onto it to win it.
+- Then put leftover AP on reserves for players next to the ball and in front of your goal: they press
+  his next dribble and pounce on loose balls.
+- Late in the match, if you're behind, attack with more players; if you're ahead, keep it safe.`;
 
 /** The position in text: score, ball, every player with their segment (+ = reserves). */
 export function describe(s: State): string {
@@ -55,40 +79,22 @@ export function describe(s: State): string {
   ].join("\n");
 }
 
-/** The options of the side to move, summarised so the model doesn't have to do hex geometry. */
+/** The side to move's options, worked out with exact odds (see odds.ts), best first in each group. */
 export function options(s: State): string {
-  const team = s.turn, c = carrier(s), lines: string[] = [];
-  const goal = attackGoal(team);
-  const goalDist = (h: number) => Math.min(...goal.map(g => hexDist(h, g)));
-  for (const p of s.players.filter(x => x.team === team)) {
-    const { cost } = reach(s, p);
-    const best = new Map<number, number>();
-    for (const [seg, k] of cost) { const h = segHex(seg); if (!best.has(h) || best.get(h)! > k) best.set(h, k); }
-    const byCost = new Map<number, number[]>();
-    for (const [h, k] of best) { if (!byCost.has(k)) byCost.set(k, []); byCost.get(k)!.push(HEXES[h].num); }
-    const reachTxt = [...byCost.keys()].sort((a, b) => a - b).map(k => `${k}AP: ${byCost.get(k)!.sort((a, b) => a - b).join(",")}`).join(" | ");
-    const opp = inHex(s, hexOf(p)).filter(x => x.team !== team).map(x => x.id);
-    lines.push(`#${p.num} (${p.role}) on ${segName(p.seg)}, ${goalDist(hexOf(p))} spots from goal${opp.length ? `, sharing the spot with ${opp.join(" ")}` : ""}. Can reach spots ${reachTxt || "none"}.`);
+  const team = s.turn, { summary, options: opts } = analyze(s);
+  const roster = s.players.filter(p => p.team === team)
+    .map(p => `#${p.num} ${p.role} ${segName(p.seg)} (${goalDist(team, hexOf(p))} from goal)${p.reserve ? ` +${p.reserve}` : ""}${s.beaten.includes(p.id) ? " beaten" : ""}`).join("; ");
+  const head: Record<string, string> = {
+    shot: "Shots", pass: "Passes to feet", through: "Through balls into space", dribble: "Dribbles forward",
+    run: "Runs into space (to receive a pass next)", press: "Win the ball back", reserve: "Reserves", loose: "Loose ball",
+  };
+  const lines = [summary, `Your players: ${roster}`];
+  let last = "";
+  for (const o of opts) {
+    if (o.kind !== last) { lines.push(`${head[o.kind]}:`); last = o.kind; }
+    lines.push(`  ${o.text}`);
   }
-  if (c && c.team === team) {
-    const bh = s.ball.hex, targets = new Set(passTargets(s, c));
-    lines.push(`#${c.num} has the ball on spot ${hexName(bh)}.`);
-    for (const m of s.players.filter(x => x.team === team && x !== c)) {
-      const h = hexOf(m);
-      if (!targets.has(h)) continue;
-      const lane = laneThreats(s, team, bh, h).map(t => t.p.id + (t.react ? "(reserve)" : ""));
-      const there = inHex(s, h).filter(x => x.team !== team).map(x => x.id);
-      lines.push(`  pass #${c.num}>#${m.num} (spot ${hexName(h)}): lane ${lane.length ? "threatened by " + lane.join(" ") : "clear"}${there.length ? `, marked by ${there.join(" ")}` : ""}`);
-    }
-    for (const g of goal.filter(g => targets.has(g))) {
-      const lane = laneThreats(s, team, bh, g).map(t => t.p.id);
-      const gk = s.players.find(x => x.team !== team && x.role === "GK")!;
-      lines.push(`  shot #${c.num}>>${hexName(g)}: lane ${lane.length ? "threatened by " + lane.join(" ") : "clear"}, keeper ${hexDist(hexOf(gk), g)} spots away`);
-    }
-  } else if (c) {
-    const tacklers = s.players.filter(x => x.team === team && hexOf(x) === s.ball.hex && !s.beaten.includes(x.id));
-    lines.push(`${c.id} has the ball on spot ${hexName(s.ball.hex)}.${tacklers.length ? ` You can tackle: ${tacklers.map(x => `#${x.num}x#${c.num}`).join(" ")}` : " Nobody of yours is on that spot yet."}`);
-  } else lines.push(`The ball is loose on spot ${hexName(s.ball.hex)}: move a player onto it to pick it up.`);
+  if (!opts.length) lines.push("No obvious options: reposition players towards the ball, or end the turn.");
   return lines.join("\n");
 }
 
@@ -108,13 +114,14 @@ ${describe(s)}
 === YOUR OPTIONS ===
 ${options(s)}
 ${extra}
-Plan this turn. Spend your AP well: build attacks, keep the ball, press when defending, and put leftover AP on reserves near the ball.
+Plan this turn following the playbook. Options marked "then" are two commands. The odds are for
+the position as it is now; after your first commands the picture changes, so order them well.
 Reply with ONLY a JSON object, no other text:
-{"commands": ["#10-50d", "#10>#7", "#4+", "/"], "note": "<one short sentence about your idea>"}`;
+{"idea": "<one sentence: what you're going for>", "commands": ["#7-50d", "#7>#10", "#10-59a", "#10>>113"], "note": "<a short line for the commentary>"}`;
 }
 
 /** Read a reply into commands and a note. Accepts text (JSON inside) or parsed JSON. */
-export function parsePlan(reply: unknown): { commands: string[]; note: string } {
+export function parsePlan(reply: unknown): { commands: string[]; note: string; idea: string } {
   let v: unknown = reply;
   if (typeof v === "string") {
     const t = v.trim(), tries = [t];
@@ -125,9 +132,12 @@ export function parsePlan(reply: unknown): { commands: string[]; note: string } 
     v = undefined;
     for (const x of tries) { try { v = JSON.parse(x); break; } catch { /* next */ } }
   }
-  const o = v as { commands?: unknown; note?: unknown } | undefined;
+  const o = v as { commands?: unknown; note?: unknown; idea?: unknown } | undefined;
   if (!o || !Array.isArray(o.commands)) throw new Error("the coach's answer had no commands list");
-  return { commands: o.commands.map(String).map(x => x.trim()).filter(Boolean), note: typeof o.note === "string" ? o.note : "" };
+  return {
+    commands: o.commands.map(String).map(x => x.trim()).filter(Boolean),
+    note: typeof o.note === "string" ? o.note : "", idea: typeof o.idea === "string" ? o.idea : "",
+  };
 }
 
 /**
@@ -135,14 +145,14 @@ export function parsePlan(reply: unknown): { commands: string[]; note: string } 
  * coach's note and any errors it made. Ends the turn itself if the plan runs out.
  */
 export async function coachTurn({ match, ask, repairs = 1 }: { match: Match; ask: Ask; repairs?: number }):
-  Promise<{ played: string[]; note: string; errors: string[] }> {
+  Promise<{ played: string[]; note: string; idea: string; errors: string[] }> {
   const team = match.state.turn, no = match.state.turnNo;
   const live = () => !match.state.over && match.state.turn === team && match.state.turnNo === no;
   const played: string[] = [], errors: string[] = [];
-  let note = "", extra = "";
+  let note = "", idea = "", extra = "";
   for (let round = 0; round <= repairs && live(); round++) {
     const plan = parsePlan(await ask(coachPrompt(match, extra)));
-    note = note || plan.note;
+    note = note || plan.note; idea = idea || plan.idea;
     let failed = "";
     for (const c of plan.commands) {
       if (!live()) break;
@@ -157,5 +167,5 @@ export async function coachTurn({ match, ask, repairs = 1 }: { match: Match; ask
     extra = `\n=== YOUR LAST PLAN STOPPED ===\nThese were played: ${played.join(" ") || "(none)"}\nThen "${failed}". Plan the rest of the turn from the position above.\n`;
   }
   if (live()) played.push(match.play("/").text);
-  return { played, note, errors };
+  return { played, note, idea, errors };
 }

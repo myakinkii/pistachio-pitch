@@ -2,7 +2,7 @@
 // cli.ts: replay and check matches, and play bot or Claude self-play.
 //
 //   node src/cli.ts replay match.ppn [--verify] [--board] [--to N]
-//   node src/cli.ts selfplay [--seed S] [--ap 7] [--turns 40] [-o out.ppn] [--k bot|claude] [--s bot|claude]
+//   node src/cli.ts selfplay [--seed S] [--ap 7] [--turns 40] [-o out.ppn] [--k bot|advisor|claude] [--s bot|advisor|claude]
 //
 // Claude self-play calls the Anthropic API: set ANTHROPIC_API_KEY (and optionally
 // --model, default claude-sonnet-5-5).
@@ -11,6 +11,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { Match } from "./engine/index.ts";
 import { botTurn } from "./ai/bot.ts";
 import { coachTurn, describe } from "./ai/coach.ts";
+import { advisorTurn } from "./ai/advisor.ts";
 
 function args(argv: string[]) {
   const out: Record<string, string | boolean> = {}, pos: string[] = [];
@@ -48,8 +49,9 @@ async function main() {
       const t = m.state.turn;
       if (kinds[t] === "claude") {
         const r = await coachTurn({ match: m, ask });
-        if (!opts.quiet) console.error(`${t} ${r.played.join(" ")}${r.note ? "  // " + r.note : ""}`);
-      } else botTurn(m);
+        if (!opts.quiet) console.error(`${m.state.turnNo - 1}${t}. ${r.played.join(" ")}${r.idea ? "  // " + r.idea : ""}${r.errors.length ? `  [fixed: ${r.errors.join("; ")}]` : ""}`);
+      } else if (kinds[t] === "advisor") advisorTurn(m);
+      else botTurn(m);
     }
     const text = m.toText();
     if (typeof opts.o === "string") writeFileSync(opts.o, text);
@@ -57,10 +59,10 @@ async function main() {
     console.error(`${m.headers.Kernels} ${m.result} ${m.headers.Shells}`);
     return;
   }
-  console.log("usage:\n  pp replay file.ppn [--verify] [--board] [--to N]\n  pp selfplay [--seed S] [--ap 7] [--turns 40] [-o out.ppn] [--k bot|claude] [--s bot|claude] [--model id]");
+  console.log("usage:\n  pp replay file.ppn [--verify] [--board] [--to N]\n  pp selfplay [--seed S] [--ap 7] [--turns 40] [-o out.ppn] [--k bot|advisor|claude] [--s bot|advisor|claude] [--model id]");
 }
 
-const label = (k: string) => (k === "claude" ? "Claude" : "Bot");
+const label = (k: string) => (k === "claude" ? "Claude" : k === "advisor" ? "Advisor" : "Bot");
 
 function makeAsk(model: string) {
   return async (prompt: string): Promise<string> => {
