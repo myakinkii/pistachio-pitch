@@ -1,2 +1,2 @@
 # pistachio-pitch
-Its like a football pitch but with pistachios
+Turn-based football game but with pistachios. 100% vibe-coded.
