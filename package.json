@@ -1,0 +1,33 @@
+{
+  "name": "pistachio-pitch",
+  "version": "0.1.0",
+  "description": "Turn-based football with pistachios: hex pitch engine, notation, replays and an AI coach.",
+  "scripts": {
+    "test": "node --test \"test/*.test.ts\"",
+    "typecheck": "tsc --noEmit",
+    "build": "node scripts/build-web.mjs",
+    "pp": "node src/cli.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/myakinkii/pistachio-pitch.git"
+  },
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/myakinkii/pistachio-pitch/issues"
+  },
+  "homepage": "https://github.com/myakinkii/pistachio-pitch#readme",
+  "devDependencies": {
+    "@types/node": "22.18.0",
+    "esbuild": "0.25.11",
+    "typescript": "5.9.3"
+  },
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22.18"
+  },
+  "bin": {
+    "pp": "src/cli.ts"
+  }
+}
