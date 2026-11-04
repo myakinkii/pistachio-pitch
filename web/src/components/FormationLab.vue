@@ -4,9 +4,10 @@
 // then a spot. "Copy as JSON" gives a data/formations.json with your changes.
 import { ref, reactive, computed, watch } from "vue";
 import {
-  newState, control, HEXES, hexByNum, hexAt, mirror, segHex, pixelOf, FORMATIONS, FORMATION_NAMES,
+  newState, control, HEXES, hexByNum, hexAt, hexDist, mirror, segHex, pixelOf, FORMATIONS, FORMATION_NAMES, BUILDS,
   type TeamId,
 } from "../../../src/engine/index.ts";
+import { chain } from "../../../src/ai/tempo.ts";
 import { DEFS, staticBoard, viewBox, pieceSvg, controlSvg, centre, R, HH } from "../lib/draw.ts";
 import { store, prefs } from "../lib/game.ts";
 
@@ -54,6 +55,20 @@ const counts = computed(() => {
   const hexes = state.value.players.map(p => segHex(p.seg));
   const shared = new Set(hexes.filter((h, i) => hexes.indexOf(h) !== i)).size;
   return { K: stat("K"), S: stat("S"), shared };
+});
+/** Tempo, from the shapes as edited here: development (kick-off to target) and the keeper's chain to the box. */
+const tempo = computed(() => {
+  const one = (t: TeamId) => {
+    const players = draft[pick[t]].players;
+    const spots = players.map(p => hexDist(hexByNum(p.kickoff)!, hexByNum(p.target)!));
+    const ap = spots.reduce((a, b) => a + b, 0);
+    const turns = Math.max(Math.ceil(ap / 7), ...players.map((p, i) => Math.ceil(spots[i] / (1 + BUILDS[p.pos].pac))));
+    const c = chain(state.value, t);
+    const ch = c.passes === Infinity ? "no passing chain to the box"
+      : `keeper to the box in ${c.passes} pass${c.passes === 1 ? "" : "es"}, ${Math.round(c.safe * 100)}% clear${c.reached ? "" : " (nobody next to the penalty spot)"}`;
+    return `develops in ${turns} turn${turns === 1 ? "" : "s"} (${ap} AP); ${ch}`;
+  };
+  return { K: one("K"), S: one("S") };
 });
 
 function onClick(e: MouseEvent) {
@@ -111,6 +126,10 @@ async function copy() {
     <p class="lab-counts">
       <span>Kernels {{ pick.K }}: {{ counts.K.all }} segments, {{ counts.K.theirs }} in the Shells’ half</span>
       <span>Shells {{ pick.S }}: {{ counts.S.all }} segments, {{ counts.S.theirs }} in the Kernels’ half</span>
+    </p>
+    <p class="lab-counts">
+      <span>Kernels {{ tempo.K }}</span>
+      <span>Shells {{ tempo.S }}</span>
     </p>
     <svg class="lab-pitch" :class="{ 'no-coords': !pick.numbers }" :style="{ '--tint': prefs.tint / 100 }" :viewBox="viewBox(prefs.rot)"
       role="img" aria-label="Both formations on the pitch, with who controls which segments" @click="onClick">

@@ -38,6 +38,7 @@ node src/cli.ts selfplay --seed demo -o matches/demo.ppn       # bot vs bot
 node src/cli.ts replay matches/demo.ppn --verify               # rebuild it and check every result
 node src/cli.ts replay matches/demo.ppn --to 30                # the position after 30 actions
 node src/cli.ts selfplay --k advisor --s bot                   # the advisor against the bot
+node src/cli.ts tempo                                          # how fast each formation develops and reaches the box
 ANTHROPIC_API_KEY=... node src/cli.ts selfplay --k claude --s bot -o matches/claude.ppn
 ```
 
@@ -52,7 +53,11 @@ the page and the CLI run the same engine with the same seeded dice.
   `notation.ts` (PPN), `match.ts` (recording, replay, verification).
 - `src/ai/`: `bot.ts`, a deterministic heuristic coach; `odds.ts`, exact
   chances from the dice and an analysis of the side to move's real options;
-  `advisor.ts`, a coach that always plays the top-rated option; and `coach.ts`,
+  `advisor.ts`, a coach that always plays the top-rated option; `tempo.ts`,
+  the tempo measures (development: AP and turns from kick-off to target shape;
+  chain: fewest passes from the keeper to the opponent's penalty spot against
+  the other shape, and how likely they all get through; coverage: width, depth
+  and the gaps between lines); and `coach.ts`,
   the model-agnostic LLM coach: give it an `ask(prompt)` function.
 - `src/commentary.ts`: commentary lines from match events.
 - `src/cli.ts`: replay, verify and self-play.

@@ -8,10 +8,11 @@
 // --model, default claude-sonnet-5-5).
 
 import { readFileSync, writeFileSync } from "node:fs";
-import { Match } from "./engine/index.ts";
+import { Match, FORMATION_NAMES } from "./engine/index.ts";
 import { botTurn } from "./ai/bot.ts";
 import { coachTurn, describe } from "./ai/coach.ts";
 import { advisorTurn } from "./ai/advisor.ts";
+import { development, chain, coverage, shapes } from "./ai/tempo.ts";
 
 function args(argv: string[]) {
   const out: Record<string, string | boolean> = {}, pos: string[] = [];
@@ -59,7 +60,33 @@ async function main() {
     console.error(`${m.headers.Kernels} ${m.result} ${m.headers.Shells}`);
     return;
   }
-  console.log("usage:\n  pp replay file.ppn [--verify] [--board] [--to N]\n  pp selfplay [--seed S] [--ap 7] [--turns 40] [-o out.ppn] [--k bot|advisor|claude] [--s bot|advisor|claude] [--model id]");
+  if (cmd === "tempo") {
+    // development of every formation, and the keeper-to-box chain of every matchup (target shapes)
+    const ap = opts.ap ? Number(opts.ap) : 7;
+    const names = FORMATION_NAMES;
+    console.log(`Development, kick-off to target shape (${ap} AP a turn):`);
+    for (const n of names) {
+      const d = development(n, ap);
+      console.log(`  ${n.padEnd(6)} ${String(d.ap).padStart(3)} AP, ${d.turns} turns (slowest: ${d.slowest})`);
+    }
+    console.log("\nKeeper to the opponent's penalty spot, target shapes against each other (passes, chance all get through):");
+    console.log("  " + "".padEnd(8) + names.map(n => ("v " + n).padEnd(14)).join(""));
+    for (const a of names) {
+      const row = names.map(b => {
+        const c = chain(shapes(a, b), "K");
+        return (c.passes === Infinity ? "no chain" : `${c.passes}${c.reached ? "" : "*"} ${Math.round(c.safe * 100)}%`).padEnd(14);
+      });
+      console.log("  " + a.padEnd(8) + row.join(""));
+    }
+    console.log("  (* nobody next to the penalty spot: the chain ends at the closest player)");
+    console.log("\nCoverage of each target shape (spots from the own goal line):");
+    for (const n of names) {
+      const c = coverage(shapes(n, n), "K");
+      console.log(`  ${n.padEnd(6)} width ${c.width}, depth ${c.depth}; lines ${c.lines.map(l => `${l.line} at ${l.at} (width ${l.width})`).join(", ")}; gaps ${c.gaps.join(", ")}`);
+    }
+    return;
+  }
+  console.log("usage:\n  pp replay file.ppn [--verify] [--board] [--to N]\n  pp tempo [--ap 7]\n  pp selfplay [--seed S] [--ap 7] [--turns 40] [-o out.ppn] [--k bot|advisor|claude] [--s bot|advisor|claude] [--model id]");
 }
 
 const label = (k: string) => (k === "claude" ? "Claude" : k === "advisor" ? "Advisor" : "Bot");

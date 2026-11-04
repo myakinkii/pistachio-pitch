@@ -164,9 +164,10 @@ details p{font-size:14px;margin:8px 0}
 .lab .close{font-size:16px;padding:4px 10px}
 .lab-bar{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px 16px;align-items:center;margin:8px 0}
 .lab .mode{display:flex;flex-wrap:wrap;gap:12px}
-.lab-counts{display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px 16px;font-size:14px;color:var(--muted);margin:0 0 6px;font-variant-numeric:tabular-nums}
+.lab-counts{display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px 16px;font-size:14px;color:var(--muted);margin:0 0 6px;font-variant-numeric:tabular-nums}
 .lab-pitch{display:block;width:100%;height:auto;max-height:62vh;background:#fbfbf8;border-radius:8px}
 .lab-spot{fill:transparent;cursor:pointer}
 .lab-spot:hover{fill:rgba(255,255,255,.35)}
 .lab .piece{cursor:pointer}
 .lab-json{margin-top:8px}
+.lab-counts span:last-child{text-align:right}
