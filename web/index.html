@@ -3,42 +3,44 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Pistachio Pitch</title>
+<title>Calcio Pistacchio</title>
 <style>/*STYLE*/</style>
 </head>
 <body>
 <main class="app">
   <section class="board-wrap" aria-label="Pitch">
+    <div id="hud" class="hud" aria-label="Match status"></div>
     <svg id="pitch" role="application" aria-label="Hex football pitch with pistachio players"></svg>
   </section>
 
   <aside class="panel">
-    <header>
-      <h1>Pistachio Pitch</h1>
-      <p class="sub">Turn-based football with pistachios.</p>
-    </header>
-
-    <div class="score" aria-label="Score">
+    <div class="score" id="scoreBox" aria-label="Score">
+      <h1 class="title">Calcio Pistacchio</h1>
       <div class="team K"><svg viewBox="-12 -16 24 32" aria-hidden="true"><ellipse rx="10.5" ry="14.5" fill="#7c9d3b" stroke="#3a2a2e" stroke-width="1.2"/></svg><span id="nameK">Kernels</span></div>
       <div class="nums"><span id="sK">0</span><span>:</span><span id="sS">0</span></div>
       <div class="team S"><span id="nameS">Shells</span><svg viewBox="-12 -16 24 32" aria-hidden="true"><ellipse rx="11" ry="15" fill="#e3d4b2" stroke="#8a7249" stroke-width="1.2"/></svg></div>
+      <select id="sideK" class="side K" aria-label="Who plays the Kernels"><option value="human">You</option><option value="bot">Bot</option><option value="advisor">Advisor</option><option value="claude">Claude</option></select>
+      <span class="vs" aria-hidden="true">–</span>
+      <select id="sideS" class="side S" aria-label="Who plays the Shells"><option value="human">You</option><option value="bot" selected>Bot</option><option value="advisor">Advisor</option><option value="claude">Claude</option></select>
+      <label class="ctl auto" title="Claude sides make one request per turn on your Claude account; any problem switches auto-play off"><input type="checkbox" id="autoAi"> Auto-play AI sides</label>
     </div>
 
-    <div class="turn">
+    <div class="turn" id="turnBox">
       <div class="turn-row"><span id="turnText"></span><span id="turnNo"></span></div>
       <div class="ap-row"><span class="ap-label">Actions left</span><div class="pips" id="pips"></div></div>
       <div id="replayBar" class="replay" hidden>
-        <span id="replayText"></span>
+        <span class="replay-text"></span>
         <div class="row">
-          <button id="rFirst" type="button" aria-label="First action">⏮</button>
-          <button id="rPrev" type="button" aria-label="Previous action">◀</button>
-          <button id="rNext" type="button" aria-label="Next action">▶</button>
-          <button id="rLast" type="button" aria-label="Last action">⏭</button>
-          <button id="rResume" type="button">Play on from here</button>
+          <button data-r="first" type="button" aria-label="First action">⏮</button>
+          <button data-r="prev" type="button" aria-label="Previous action">◀</button>
+          <button data-r="next" type="button" aria-label="Next action">▶</button>
+          <button data-r="last" type="button" aria-label="Last action">⏭</button>
+          <button data-r="resume" type="button">Play on from here</button>
         </div>
       </div>
       <p id="hint" class="hint" aria-live="polite"></p>
       <div class="row">
+        <button id="undo" type="button" class="quiet">Undo</button>
         <button id="reserveBtn" type="button" disabled>Reserve (+1 AP on player)</button>
         <button id="endTurn" type="button" class="strong">End turn</button>
       </div>
@@ -47,21 +49,6 @@
         <button id="aiStop" type="button" hidden>Stop</button>
         <p id="aiNote" class="note"></p>
       </div>
-    </div>
-
-    <div class="sides">
-      <label class="ctl">Kernels
-        <select id="sideK"><option value="human">You</option><option value="bot">Bot</option><option value="advisor">Advisor</option><option value="claude">Claude</option></select>
-      </label>
-      <label class="ctl">Shells
-        <select id="sideS"><option value="human">You</option><option value="bot" selected>Bot</option><option value="advisor">Advisor</option><option value="claude">Claude</option></select>
-      </label>
-      <label class="ctl" title="Claude sides make one request per turn on your Claude account; any problem switches auto-play off"><input type="checkbox" id="autoAi"> Auto-play AI sides</label>
-    </div>
-
-    <div class="controls">
-      <button id="undo" type="button">Undo</button>
-      <button id="newBtn" type="button">New match</button>
     </div>
 
     <details id="displayBox">
@@ -74,7 +61,7 @@
     </details>
 
     <details id="newBox">
-      <summary>Match settings</summary>
+      <summary>New match</summary>
       <div class="settings">
         <label class="ctl">Seed <input id="seedIn" type="text" spellcheck="false"></label>
         <label class="ctl">Actions per turn
@@ -98,20 +85,29 @@
         <label class="file">Open file<input id="fileIn" type="file" accept=".ppn,.txt,text/plain"></label>
       </div>
       <p id="ioNote" class="small" aria-live="polite"></p>
+      <p class="log-head">Replay</p>
+      <p class="small replay-text">Step through the match so far, or a loaded file.</p>
+      <div class="row">
+        <button data-r="first" type="button" aria-label="First action">⏮</button>
+        <button data-r="prev" type="button" aria-label="Previous action">◀</button>
+        <button data-r="next" type="button" aria-label="Next action">▶</button>
+        <button data-r="last" type="button" aria-label="Last action">⏭</button>
+        <button data-r="resume" type="button" class="resume-btn">Play on from here</button>
+      </div>
     </details>
 
-    <section>
-      <p class="log-head">Commentary</p>
-      <ol id="comms" class="log"></ol>
-    </section>
 
     <details>
       <summary>How it plays</summary>
-      <p>Each hexagon is a ball spot with six segments where players stand. Your side spends a pool of actions each turn: one step costs one action; passes, shots, tackles and reserves cost one each.</p>
+      <p>Each hexagon is a ball spot with six segments where players stand. Your side spends a pool of actions each turn: moving costs one per hexagon, plus one for each opponent in it and one more with the ball; changing segment within your hexagon, passes, shots, tackles and reserves cost one each.</p>
       <p>Select a pistachio to see where it can go (the numbers are costs). With the ball, step into another hexagon to dribble, or use a ring to pass or shoot. Opponents in a hexagon you dribble into duel you; opponents in a passing lane may cut it out. Dice and player stats decide.</p>
       <p>To tackle, stand in the ball’s hexagon and tap the ball. A player who loses a tackle can’t tackle again that turn.</p>
       <p>Reserves are actions you leave on a player for the opponent’s turn: they press dribblers next to them, stretch for nearby passes and grab loose balls. Losing the ball ends your turn.</p>
     </details>
+    <section class="comms">
+      <p class="log-head">Commentary</p>
+      <ol id="comms" class="log"></ol>
+    </section>
   </aside>
 </main>
 <script>/*SCRIPT*/</script>

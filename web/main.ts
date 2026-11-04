@@ -98,6 +98,13 @@ function buildBoard() {
   lowG = document.getElementById("low")!; topG = document.getElementById("top")!;
   ballEl = document.getElementById("ball") as unknown as SVGGElement;
   document.querySelector(".app")!.classList.toggle("wide", ROT !== 0);
+  placeStatus();
+}
+/** Sideways, the score and turn boxes sit in a status bar above the pitch; upright, in the side panel. */
+function placeStatus() {
+  const hud = document.getElementById("hud")!, score = document.getElementById("scoreBox")!, turn = document.getElementById("turnBox")!;
+  if (ROT) { hud.append(score, turn); }
+  else { document.querySelector(".panel")!.prepend(score, turn); }
 }
 try { if (localStorage.getItem("pp-rot") === "90") ROT = 90; } catch { /* storage unavailable */ }
 buildBoard();
@@ -131,7 +138,6 @@ function play(text: string): Entry | null {
     const before = match.state;
     const e = match.play(text);
     for (const l of commentary(e.events, before, match.state)) comms.unshift({ ...l, n: e.turnNo, team: e.team });
-    comms = comms.slice(0, 80);
     ui.error = "";
     if (match.state.turn !== before.turn || match.state.turnNo !== before.turnNo) { ui.sel = null; ui.preview = null; }
     else ui.preview = null;
@@ -337,9 +343,7 @@ function hintText(): string {
 function renderPanel() {
   const s = shown();
   $("sK").textContent = String(s.score.K); $("sS").textContent = String(s.score.S);
-  const sideName: Record<Side, string> = { human: "", bot: " (Bot)", advisor: " (Advisor)", claude: " (Claude)" };
-  $("nameK").textContent = "Kernels" + sideName[sides.K];
-  $("nameS").textContent = "Shells" + sideName[sides.S];
+
   $("turnText").innerHTML = s.over ? "Full time" : `<span class="chip" style="background:${TEAM[s.turn].chip}"></span>${TEAM[s.turn].name} to play`;
   $("turnNo").textContent = `Turn ${Math.min(s.turnNo, s.maxTurns)} of ${s.maxTurns}`;
   $("pips").innerHTML = Array.from({ length: s.apPerTurn }, (_, i) => `<span class="pip${i < s.ap ? " full" : ""}"></span>`).join("");
@@ -351,7 +355,13 @@ function renderPanel() {
   ($("undo") as HTMLButtonElement).disabled = !match.entries.length || view !== null || !!aiBusy;
   // replay bar
   $("replayBar").hidden = view === null;
-  if (view !== null) $("replayText").textContent = `Replay: action ${view} of ${match.entries.length}${view > 0 ? ` (last: ${match.entries[view - 1].text})` : ""}`;
+  const rtext = view !== null
+    ? `Replay: action ${view} of ${match.entries.length}${view > 0 ? ` (last: ${match.entries[view - 1].text})` : ""}`
+    : `Step through the match so far (${match.entries.length} actions), or a loaded file.`;
+  document.querySelectorAll(".replay-text").forEach(el => { el.textContent = rtext; });
+  document.querySelectorAll<HTMLButtonElement>("[data-r]").forEach(b => {
+    b.disabled = !!aiBusy || !match.entries.length || (b.dataset.r === "resume" && view === null);
+  });
   // AI box
   const side = sides[s.turn];
   const showAi = live() && side !== "human";
@@ -387,7 +397,6 @@ function restore() {
 function rebuildComms() {
   comms = [];
   match.entries.forEach((e, i) => { for (const l of commentary(e.events, match.stateAt(i), match.stateAt(i + 1))) comms.unshift({ ...l, n: e.turnNo, team: e.team }); });
-  comms = comms.slice(0, 80);
 }
 
 // ---------- controls ----------
@@ -465,25 +474,35 @@ document.addEventListener("keydown", e => {
   if (view !== null && (e.key === "ArrowRight" || e.key === "ArrowLeft")) step(e.key === "ArrowRight" ? 1 : -1);
 });
 
-$("newBtn").addEventListener("click", () => { ($("newBox") as HTMLDetailsElement).open = true; ($("seedIn") as HTMLInputElement).value = randomSeed(); $("seedIn").focus(); });
+// The New match panel offers a fresh seed each time it's opened empty; type your own to replay a fixture.
+const seedIn = $("seedIn") as HTMLInputElement;
+$("newBox").addEventListener("toggle", () => { if (($("newBox") as HTMLDetailsElement).open && !seedIn.value.trim()) seedIn.value = randomSeed(); });
 $("startBtn").addEventListener("click", () => {
   aiBusy?.abort();
   const seed = ($("seedIn") as HTMLInputElement).value.trim() || randomSeed();
   match = new Match({ seed, ap: Number(($("apSel") as HTMLSelectElement).value), turns: Number(($("turnsSel") as HTMLSelectElement).value) });
   view = null; comms = []; ui.sel = null; ui.preview = null; ui.error = ""; setAiNote("");
+  seedIn.value = randomSeed(); ($("newBox") as HTMLDetailsElement).open = false;
   save(); render(); schedule();
 });
 
 // replay stepping
 function step(d: number) { if (view === null) view = match.entries.length; view = Math.max(0, Math.min(match.entries.length, view + d)); render(); }
-$("rFirst").addEventListener("click", () => { view = 0; render(); });
-$("rPrev").addEventListener("click", () => step(-1));
-$("rNext").addEventListener("click", () => step(1));
-$("rLast").addEventListener("click", () => { view = match.entries.length; render(); });
-$("rResume").addEventListener("click", () => {
-  if (view === null) return;
-  while (match.entries.length > view) match.undo();
-  view = null; rebuildComms(); save(); render(); schedule();
+function replay(what: string) {
+  if (aiBusy) return;
+  if (botTimer) { clearTimeout(botTimer); botTimer = null; }
+  if (what === "first") { view = 0; render(); }
+  else if (what === "prev") step(-1);
+  else if (what === "next") step(1);
+  else if (what === "last") { view = match.entries.length; render(); }
+  else if (what === "resume" && view !== null) {
+    while (match.entries.length > view) match.undo();
+    view = null; rebuildComms(); save(); render(); schedule();
+  }
+}
+document.addEventListener("click", e => {
+  const b = (e.target as Element).closest<HTMLButtonElement>("[data-r]");
+  if (b && !b.disabled) replay(b.dataset.r!);
 });
 
 // save and load
