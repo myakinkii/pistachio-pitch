@@ -1,6 +1,6 @@
-# Rules (version 0.1)
+# Rules (version 0.2)
 
-The rules version is written into every match file (`[Rules "0.1"]`). Change it
+The rules version is written into every match file (`[Rules "0.2"]`). Change it
 whenever a change makes old matches play out differently, so old files are
 refused instead of silently replaying wrong.
 
@@ -25,7 +25,7 @@ kicking off. After a goal, the side that conceded kicks off, as a new turn.
 
 | Command | AP | |
 |---|---|---|
-| `#10-50d` / `#10-50` | 1 per step | move to a segment (or the cheapest free segment of a spot) |
+| `#10-50d` / `#10-50` | see below | move to a segment (or a free segment of a spot) |
 | `#10>#7` | 1 | pass to a teammate's feet |
 | `#10>58` | 1 | pass into space |
 | `#10>>113` | 1 | shoot at a goal spot |
@@ -33,8 +33,11 @@ kicking off. After a goal, the side that conceded kicks off, as a new turn.
 | `#4+` | 1 | put a reserve on a player (max 2 per player) |
 | `/` | | end the turn |
 
-A step goes to an edge-adjacent segment: one of the two beside it in the same
-spot, or the one across its outer edge. Occupied segments block.
+Moving goes spot by spot. Stepping into a neighbouring spot costs **1 AP, +1 per
+opponent standing in it, +1 if the player carries the ball**, and needs a free
+segment to arrive on (any free one; the path is the cheapest, ties broken by
+spot order). Changing segment within your own spot costs 1 AP. The ball is
+faster than legs: a pass covers up to 5 spots for 1 AP, a dribbler 1 spot for 2.
 
 **Losing the ball through your own action ends your turn** (turnover).
 
@@ -67,7 +70,7 @@ the contest happens.
   win keeps it, tie leaves it loose, lose loses it); opponents only win it; an
   empty target leaves the ball loose. Range: 5 spots.
 - **Shot at a goal spot**: if the keeper is on that spot or next to it:
-  keep + d6 (+1 on the spot, -1 next to it) against shoot + d6 - 1 per spot past 3.
+  keep + d6 (+1 on that spot) against shoot + d6 - 1 per spot past 2.
   Keeper higher: saved and held. Tie: parried loose to a random spot next to the
   goal. Shooter higher (or keeper too far): goal.
 - Walking onto a loose ball picks it up.
@@ -90,3 +93,13 @@ Unused reserves expire when your own next turn starts.
 
 Fouls, free kicks, penalties and corners; offside; stamina; skills and perks;
 substitutions; live reactions (quick-time decisions).
+
+## Changes
+
+- **0.2**: movement by spot instead of by segment (1 AP per spot, +1 per
+  opponent in it, +1 carrying the ball; 1 AP to change segment in your own spot).
+  Shots got harder: -1 per spot past 2 (was 3), and the keeper no longer takes
+  -1 when he's next to the target spot. Measured over bot and advisor matches:
+  about 3 goals a match and a quarter of shots scored (rules 0.1 with spot
+  movement alone gave 14 goals a match).
+- **0.1**: first version.

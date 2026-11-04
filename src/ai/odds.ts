@@ -63,7 +63,7 @@ export function analyze(s: State): { summary: string; options: Option[] } {
       const gd = hexDist(hexOf(keeper), g), dist = hexDist(bh, g);
       let goal = 1, save = "keeper can't reach it";
       if (gd <= 1) {
-        const o = duelOdds(c.st.shoot - Math.max(0, dist - 3), keeper.st.keep + (gd === 0 ? 1 : -1));
+        const o = duelOdds(c.st.shoot - Math.max(0, dist - 2), keeper.st.keep + (gd === 0 ? 1 : 0));
         goal = o.win; save = `keeper ${gd === 0 ? "on that spot" : "next to it"}`;
       }
       const p = lane.safe * goal;

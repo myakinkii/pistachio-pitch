@@ -20,6 +20,9 @@ html{scroll-padding-top:env(safe-area-inset-top,0px)}
 body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.5 "Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif}
 .app{display:grid;grid-template-columns:minmax(0,1fr) 350px;gap:28px;max-width:1040px;margin:0 auto;padding:16px 16px 32px;align-items:start}
 @media (max-width:800px){.app{grid-template-columns:1fr;gap:16px}}
+.app.wide{grid-template-columns:1fr;max-width:1200px}
+.app.wide #pitch{max-height:calc(100vh - 32px)}
+.settings .ctl input[type=checkbox]{accent-color:var(--accent)}
 .board-wrap{display:flex;justify-content:center}
 #pitch{width:100%;height:auto;max-height:calc(100vh - 32px);display:block;touch-action:manipulation;user-select:none;-webkit-user-select:none}
 @media (max-width:800px){#pitch{max-height:none}}
@@ -54,7 +57,7 @@ code{font-size:12.5px}
 
 .sides{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
 .controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-.settings{display:flex;flex-direction:column;gap:10px;margin-top:8px}
+.settings{display:flex;flex-direction:column;align-items:flex-start;gap:10px;margin-top:8px}
 button,select,input[type=text]{font:inherit;font-size:14px;color:var(--ink);background:var(--surface);border:1.5px solid var(--line);border-radius:10px;padding:7px 12px}
 button,select{cursor:pointer}
 input[type=text]{flex:1;min-width:0}

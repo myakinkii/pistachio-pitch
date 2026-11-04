@@ -48,7 +48,10 @@ const spotPts = (r: number) => pts([0, 1, 2, 3, 4, 5].map(k => [r * Math.cos(60 
 
 const svg = document.getElementById("pitch") as unknown as SVGSVGElement;
 const minX = -2 * R - 18, maxX = 11 * R + 18, minY = -HH - 18, maxY = 12 * HH + 18;
-svg.setAttribute("viewBox", `${minX} ${minY.toFixed(1)} ${maxX - minX} ${(maxY - minY).toFixed(1)}`);
+// Sideways view: the whole board turns 90 degrees anticlockwise (1a ends up bottom left);
+// text is counter-rotated so it stays upright. ROT is 0 or 90.
+let ROT = 0;
+const upright = (x?: number, y?: number) => (ROT ? (x === undefined ? ` transform="rotate(${ROT})"` : ` transform="rotate(${ROT} ${x.toFixed(1)} ${y!.toFixed(1)})"`) : "");
 
 function buildStatic(): string {
   let h = `<rect x="${minX + 6}" y="${(minY + 6).toFixed(1)}" width="${maxX - minX - 12}" height="${(maxY - minY - 12).toFixed(1)}" rx="6" class="sheet"/>`;
@@ -60,7 +63,7 @@ function buildStatic(): string {
   for (const x of HEXES) { const c = centre(x.id); h += `<g transform="translate(${c.x.toFixed(1)} ${c.y.toFixed(1)})"><polygon points="${sp}" class="spot"/><circle r="2.2" class="dot"/></g>`; }
   for (const id of Object.values(PENALTY_SPOT)) { const c = centre(id); h += `<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="4.6" fill="#161616"/>`; }
   const big = spotPts(9.5);
-  h += `<g id="coordNums">` + HEXES.map(x => { const c = centre(x.id); return `<g transform="translate(${c.x.toFixed(1)} ${c.y.toFixed(1)})"><polygon points="${big}" class="spot"/><text class="hexnum" y="2.8">${x.num}</text></g>`; }).join("") + `</g>`;
+  h += `<g id="coordNums">` + HEXES.map(x => { const c = centre(x.id); return `<g transform="translate(${c.x.toFixed(1)} ${c.y.toFixed(1)})"><polygon points="${big}" class="spot"/><text class="hexnum" y="2.8"${upright(0, 0)}>${x.num}</text></g>`; }).join("") + `</g>`;
   return h;
 }
 function lettersSvg(): string {
@@ -68,7 +71,8 @@ function lettersSvg(): string {
   for (let s = 0; s < NSEG; s++) {
     if (!segExists(s)) continue;
     const c = centre(segHex(s)), a = (30 + 60 * (s % 6)) * DEG;
-    h += `<text class="seglet" x="${(c.x + 30 * Math.cos(a)).toFixed(1)}" y="${(c.y + 30 * Math.sin(a) + 2.5).toFixed(1)}">${LETTERS[s % 6]}</text>`;
+    const lx = c.x + 30 * Math.cos(a), ly = c.y + 30 * Math.sin(a);
+    h += `<text class="seglet" x="${lx.toFixed(1)}" y="${(ly + 2.5).toFixed(1)}"${upright(lx, ly)}>${LETTERS[s % 6]}</text>`;
   }
   return h;
 }
@@ -80,13 +84,23 @@ const ballSvg = `<g filter="url(#drop)"><circle r="${BR}" fill="#fff"/><g clip-p
   ${[0, 1, 2, 3, 4].map(k => { const a = (-90 + 72 * k) * DEG; return `<line x1="${(4.9 * Math.cos(a)).toFixed(2)}" y1="${(4.9 * Math.sin(a)).toFixed(2)}" x2="${(BR * Math.cos(a)).toFixed(2)}" y2="${(BR * Math.sin(a)).toFixed(2)}" stroke="#111" stroke-width="0.9"/>`; }).join("")}
   </g><circle r="${BR}" fill="none" stroke="#111" stroke-width="1.8"/></g>`;
 
-svg.innerHTML = `<defs>
+let lowG: Element, topG: Element, ballEl: SVGGElement;
+function buildBoard() {
+  svg.setAttribute("viewBox", ROT
+    ? `${minY.toFixed(1)} ${-maxX} ${(maxY - minY).toFixed(1)} ${maxX - minX}`
+    : `${minX} ${minY.toFixed(1)} ${maxX - minX} ${(maxY - minY).toFixed(1)}`);
+  svg.innerHTML = `<defs>
   <linearGradient id="kernelG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#b5cf63"/><stop offset=".55" stop-color="#6f9234"/><stop offset="1" stop-color="#8a4865"/></linearGradient>
   <radialGradient id="shellG" cx=".4" cy=".35" r=".8"><stop offset="0" stop-color="#f7efde"/><stop offset="1" stop-color="#cdb88e"/></radialGradient>
   <clipPath id="ballClip"><circle r="12"/></clipPath>
   <filter id="drop" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="1.2" stdDeviation="1.1" flood-opacity=".45"/></filter>
-</defs><g>${buildStatic()}</g><g id="low"></g><g id="coordLets" pointer-events="none">${lettersSvg()}</g><g id="ball">${ballSvg}</g><g id="top"></g>`;
-const lowG = document.getElementById("low")!, topG = document.getElementById("top")!, ballEl = document.getElementById("ball") as unknown as SVGGElement;
+</defs><g${ROT ? ` transform="rotate(${-ROT})"` : ""}><g>${buildStatic()}</g><g id="low"></g><g id="coordLets" pointer-events="none">${lettersSvg()}</g><g id="ball">${ballSvg}</g><g id="top"></g></g>`;
+  lowG = document.getElementById("low")!; topG = document.getElementById("top")!;
+  ballEl = document.getElementById("ball") as unknown as SVGGElement;
+  document.querySelector(".app")!.classList.toggle("wide", ROT !== 0);
+}
+try { if (localStorage.getItem("pp-rot") === "90") ROT = 90; } catch { /* storage unavailable */ }
+buildBoard();
 
 // ---------- state ----------
 type Side = "human" | "bot" | "advisor" | "claude";
@@ -254,7 +268,7 @@ function pieceSvg(p: Player, mine: boolean, selected: boolean, threat: boolean) 
     : `<ellipse rx="10.4" ry="14.4" class="halo S"/><ellipse rx="9.4" ry="13.4" fill="url(#shellG)" stroke="#6b5430" stroke-width="1.5"/><path d="M.8 -12.8 Q3.4 0 .8 12.8" stroke="#8a7146" stroke-width="1.1" fill="none"/>`;
   const ring = selected ? `<ellipse rx="13.5" ry="17.5" class="ring-sel"/>` : threat ? `<ellipse rx="13.5" ry="17.5" class="threat"/>` : "";
   const res = p.reserve ? Array.from({ length: p.reserve }, (_, i) => `<circle class="reserve" cx="${(9 + i * 6).toFixed(1)}" cy="-12" r="2.8"/>`).join("") : "";
-  return `<g class="piece${mine ? " mine" : ""}" data-act="piece" data-id="${p.id}"${mine ? ' tabindex="0"' : ""} aria-label="${name(p)}" transform="translate(${c.x.toFixed(1)} ${c.y.toFixed(1)}) rotate(${rot})">${ring}<g filter="url(#drop)">${body}</g>${res}<text y="3.4" class="num ${p.team}" transform="rotate(${-rot})">${p.num}</text></g>`;
+  return `<g class="piece${mine ? " mine" : ""}" data-act="piece" data-id="${p.id}"${mine ? ' tabindex="0"' : ""} aria-label="${name(p)}" transform="translate(${c.x.toFixed(1)} ${c.y.toFixed(1)}) rotate(${rot})">${ring}<g filter="url(#drop)">${body}</g>${res}<text y="3.4" class="num ${p.team}" transform="rotate(${-rot + ROT})">${p.num}</text></g>`;
 }
 
 function renderBoard() {
@@ -269,7 +283,7 @@ function renderBoard() {
     lo += `<polygon points="${segPts(sel.seg)}" class="t-from"/>`;
     if (s.ap > 0) for (const [seg, cost] of reach(s, sel).cost) {
       const cc = segCentroid(seg);
-      lo += `<polygon class="t-move" data-act="move" data-seg="${seg}" data-cost="${cost}" tabindex="0" aria-label="Move to ${segName(seg)}, ${cost} AP" points="${segPts(seg)}"/><text class="cost" x="${cc.x.toFixed(1)}" y="${(cc.y + 3).toFixed(1)}">${cost}</text>`;
+      lo += `<polygon class="t-move" data-act="move" data-seg="${seg}" data-cost="${cost}" tabindex="0" aria-label="Move to ${segName(seg)}, ${cost} AP" points="${segPts(seg)}"/><text class="cost" x="${cc.x.toFixed(1)}" y="${(cc.y + 3).toFixed(1)}"${upright(cc.x, cc.y)}>${cost}</text>`;
     }
   }
   if (iCarry && ui.preview !== null) {
@@ -420,13 +434,20 @@ for (const t of ["K", "S"] as TeamId[]) {
 }
 $("autoAi").addEventListener("change", () => { render(); schedule(); });
 
-const coordBtn = $("coordToggle");
-function toggleCoords() {
-  const off = svg.classList.toggle("no-coords");
-  coordBtn.setAttribute("aria-pressed", String(!off));
-  coordBtn.textContent = off ? "Show coordinates" : "Hide coordinates";
+const coordBox = $("coordToggle") as HTMLInputElement;
+const applyCoords = () => { svg.classList.toggle("no-coords", !coordBox.checked); };
+function toggleCoords() { coordBox.checked = !coordBox.checked; applyCoords(); }
+coordBox.addEventListener("change", applyCoords);
+// Sideways pitch: a per-browser preference.
+const rotBox = $("rotate") as HTMLInputElement;
+rotBox.checked = ROT === 90;
+function setRotation(on: boolean) {
+  ROT = on ? 90 : 0;
+  try { localStorage.setItem("pp-rot", String(ROT)); } catch { /* storage unavailable */ }
+  buildBoard();
+  ballEl.style.transition = "none"; render(); ballEl.getBoundingClientRect(); ballEl.style.transition = "";
 }
-coordBtn.addEventListener("click", toggleCoords);
+rotBox.addEventListener("change", () => setRotation(rotBox.checked));
 // Pitch colour strength: a per-browser preference.
 const tint = $("tint") as HTMLInputElement;
 function setTint(v: number) { svg.style.setProperty("--tint", String(v / 100)); tint.value = String(v); }
@@ -436,9 +457,11 @@ tint.addEventListener("input", () => {
   try { localStorage.setItem("pp-tint", tint.value); } catch { /* storage unavailable */ }
 });
 document.addEventListener("keydown", e => {
-  const tag = (e.target as HTMLElement).tagName;
-  if (/INPUT|SELECT|TEXTAREA/.test(tag) || e.ctrlKey || e.metaKey || e.altKey) return;
+  const t = e.target as HTMLInputElement;
+  const typing = t.tagName === "TEXTAREA" || t.tagName === "SELECT" || (t.tagName === "INPUT" && t.type !== "checkbox" && t.type !== "range");
+  if (typing || e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.key === "c" || e.key === "C") toggleCoords();
+  if (e.key === "r" || e.key === "R") { rotBox.checked = !rotBox.checked; setRotation(rotBox.checked); }
   if (view !== null && (e.key === "ArrowRight" || e.key === "ArrowLeft")) step(e.key === "ArrowRight" ? 1 : -1);
 });
 

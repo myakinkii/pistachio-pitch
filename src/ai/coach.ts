@@ -25,10 +25,12 @@ Kernels (K) defend the top goal (spots 4, 5, 6; keeper starts on 5) and attack d
 Shells (S) defend the bottom goal (spots 113, 119, 120; keeper starts on 113) and attack upwards.
 
 Each turn your side has a pool of action points (AP) to spend on any players:
-- #N-50d moves player N to segment 50d (or #N-50 to the cheapest free segment of spot 50).
-  One step to a neighbouring segment costs 1 AP. If N has the ball, the ball comes along (dribbling):
-  stepping into a spot with opponents starts a duel (dribbling vs tackling); a tie stops him,
-  losing means he's dispossessed. Walking into a loose ball picks it up.
+- #N-50d moves player N to segment 50d (or #N-50 to a free segment of spot 50), spot by spot.
+  Each step into a neighbouring spot costs 1 AP, +1 per opponent standing in it, +1 if he has the
+  ball; a spot needs a free segment to step into. Changing segment within your own spot costs 1.
+  If N has the ball, it comes along (dribbling): stepping into a spot with opponents starts a duel
+  with each (dribbling vs tackling); a tie stops him, losing means he's dispossessed.
+  Walking into a loose ball picks it up. The ball travels faster than legs: pass to progress.
 - #N>#M passes to teammate M's feet; #N>58 passes into space (spot 58); #N>>113 shoots at a goal spot.
   1 AP. Range ${PASS_RANGE} spots. Each opponent in the lane may cut it out (roll); opponents on the
   target spot contest the reception; an empty target leaves the ball loose there. The keeper saves

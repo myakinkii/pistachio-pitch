@@ -6,7 +6,7 @@ results in braces are for people, and for checking a replay is in sync.
 
 ```
 [Game "Pistachio Pitch"]
-[Rules "0.1"]
+[Rules "0.2"]
 [Seed "demo"]
 [AP "7"]
 [Turns "40"]

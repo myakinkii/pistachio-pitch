@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { Match, RuleError, newState, apply, hexByNum, parseSeg, playerOf, type State } from "../src/engine/index.ts";
+import { Match, RuleError, newState, apply, hexByNum, parseSeg, playerOf, reach, stepCost, segHex, type State } from "../src/engine/index.ts";
 
 const at = (s: State, team: "K" | "S", num: number, seg: string) => { playerOf(s, team, num)!.seg = parseSeg(seg)!; };
 
@@ -22,12 +22,30 @@ test("illegal commands throw and change nothing", () => {
   assert.equal(m.entries.length, 0);
 });
 
-test("moves cost one AP per step and the ball travels with the carrier", () => {
+test("moving: 1 AP per free spot (+1 with the ball), 1 to change segment within your spot", () => {
   const m = new Match({ seed: "t" });
-  m.play("#10-59d");                                       // a -> b -> c -> d around the spot: 3 steps
+  m.play("#10-59d");                                       // another segment of the same spot
+  assert.equal(m.state.ap, 6);
+  m.play("#10-68a");                                       // into the next spot with the ball: 1 + 1 for carrying
   assert.equal(m.state.ap, 4);
-  m.play("#10-68a");                                       // across the bottom edge into 68
   assert.equal(m.state.ball.hex, hexByNum(68));
+  m.play("#7-58");                                         // spot only: the engine picks a free segment
+  assert.equal(m.entries[2].text, "#7-58c");               // the lowest free segment
+  assert.equal(m.state.ap, 2);                             // 40 -> 49 -> 58: two free spots, no ball
+});
+
+test("each opponent in a spot adds 1 AP to step into it, and a full spot can't be entered", () => {
+  const s = newState({ seed: "cost" });
+  at(s, "S", 7, "50a"); at(s, "S", 8, "50b");               // two Shells in spot 50
+  const k7 = playerOf(s, "K", 7)!;
+  at(s, "K", 7, "41d");                                    // Kernel #7 right next to spot 50
+  const r = reach(s, k7, 7);
+  assert.equal(r.cost.get(parseSeg("50d")!), 3);           // 1 + 2 opponents
+  assert.equal(stepCost(s, k7, hexByNum(50)!), 3);
+  const after = apply(s, { t: "move", p: 7, seg: parseSeg("50d")! }).state;
+  assert.equal(after.ap, 4);
+  ["c", "d", "e", "f"].forEach((l, i) => at(s, "S", i + 2, "50" + l));   // now all six segments are taken
+  assert.equal([...reach(s, k7, 7).cost.keys()].some(x => segHex(x) === hexByNum(50)), false);
 });
 
 test("reserves: max two per player, expire when the owner's next turn starts", () => {

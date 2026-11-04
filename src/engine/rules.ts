@@ -13,12 +13,12 @@
 
 import {
   HEXES, CENTER, CENTRE_RING, KEEPER_HEX, GOAL, attackGoal, other, hexAt,
-  segHex, segNbrs, segExists, segIsGoal, hexSegs, hexDist, hexNbrs, cx, cy, segX, segY,
+  segHex, segExists, segIsGoal, hexSegs, hexDist, hexNbrs, cx, cy, segX, segY,
   segName, hexName, type TeamId,
 } from "./geometry.ts";
 import { Dice, seedState } from "./rng.ts";
 
-export const RULES_VERSION = "0.1";
+export const RULES_VERSION = "0.2";
 export const PASS_RANGE = 5;
 export const MAX_RESERVE = 2;
 
@@ -152,20 +152,51 @@ export function canEnter(p: Player, seg: number): boolean {
   return true;
 }
 
-/** Segments the player can reach with `ap` steps: cost and the previous segment of the cheapest path. */
+/**
+ * Movement (rules 0.2) goes hexagon by hexagon: stepping into a neighbouring
+ * spot costs 1 AP, plus 1 per opponent standing in it, plus 1 if you're carrying
+ * the ball (the ball is faster than legs, dribbling is slower than running). It
+ * needs a free segment to arrive on (you pick any free one). Moving to another
+ * segment of your own spot costs 1 AP.
+ */
+export const CARRY_COST = 1;
+export function stepCost(s: State, p: Player, h: number): number {
+  if (h === hexOf(p)) return 1;
+  return 1 + inHex(s, h).filter(x => x.team !== p.team).length + (s.ball.owner === p.id ? CARRY_COST : 0);
+}
+
+/**
+ * Segments the player can reach with `ap`: cost and the previous segment on the
+ * cheapest path. A path crosses each spot on its lowest free segment; ties go to
+ * the lower spot id, so paths are deterministic.
+ */
 export function reach(s: State, p: Player, ap = s.ap): { cost: Map<number, number>; prev: Map<number, number> } {
-  const occ = occupied(s), cost = new Map([[p.seg, 0]]), prev = new Map<number, number>(), queue = [p.seg];
-  const carrying = s.ball.owner === p.id;
-  while (queue.length) {
-    const cur = queue.shift()!, c = cost.get(cur)!;
-    if (c >= ap) continue;
-    for (const n of segNbrs(cur)) {
-      if (cost.has(n) || occ.has(n) || !canEnter(p, n)) continue;
-      if (carrying && HEXES[segHex(n)].goalOf === p.team && segHex(n) !== segHex(cur)) continue;
-      cost.set(n, c + 1); prev.set(n, cur); queue.push(n);
+  const occ = occupied(s), carrying = s.ball.owner === p.id, home = hexOf(p);
+  const free = (h: number) => hexSegs(h).filter(x => !occ.has(x) && canEnter(p, x));
+  const hexCost = new Map<number, number>([[home, 0]]), from = new Map<number, number>(), entry = new Map<number, number>([[home, p.seg]]);
+  const open = [home];
+  while (open.length) {
+    open.sort((a, b) => hexCost.get(a)! - hexCost.get(b)! || a - b);
+    const h = open.shift()!, c = hexCost.get(h)!;
+    for (const n of hexNbrs(h)) {
+      if (carrying && HEXES[n].goalOf === p.team) continue;
+      const segs = free(n);
+      if (!segs.length) continue;
+      const nc = c + 1 + inHex(s, n).filter(x => x.team !== p.team).length + (carrying ? CARRY_COST : 0);
+      if (nc > ap || (hexCost.has(n) && hexCost.get(n)! <= nc)) continue;
+      if (!hexCost.has(n)) open.push(n);
+      hexCost.set(n, nc); from.set(n, h); entry.set(n, segs[0]);
     }
   }
-  cost.delete(p.seg);
+  const cost = new Map<number, number>(), prev = new Map<number, number>();
+  for (const [h, c] of hexCost) {
+    if (h === home) {
+      if (ap >= 1) for (const x of free(h)) { cost.set(x, 1); prev.set(x, p.seg); }
+      continue;
+    }
+    for (const x of free(h)) { cost.set(x, c); prev.set(x, entry.get(from.get(h)!)!); }
+  }
+  // the entry segment of an intermediate spot leads back to the previous spot's entry
   return { cost, prev };
 }
 
@@ -238,9 +269,9 @@ export function apply(state: State, cmd: Command): Applied {
       const path: number[] = [];
       for (let x = target; x !== p.seg; x = prev.get(x)!) path.unshift(x);
       for (const step of path) {
-        const fromHex = hexOf(p);
-        p.seg = step; s.ap--;
-        const h = segHex(step);
+        const fromHex = hexOf(p), h = segHex(step), c = stepCost(s, p, h);
+        if (s.ap < c) break;
+        p.seg = step; s.ap -= c;
         if (s.ball.owner === p.id && h !== fromHex) {
           s.ball.hex = h;
           if (!dribbleContests(s, p, dice, ev)) break;
@@ -416,8 +447,8 @@ function kick(s: State, p: Player, to: number, shot: boolean, toNum: number | un
     const gk = s.players.find(x => x.team !== p.team && x.role === "GK");
     const gd = gk ? hexDist(hexOf(gk), to) : 99;
     if (gk && gd <= 1) {
-      const a = p.st.shoot + dice.roll() - Math.max(0, dist - 3);
-      const d = gk.st.keep + dice.roll() + (gd === 0 ? 1 : -1);
+      const a = p.st.shoot + dice.roll() - Math.max(0, dist - 2);
+      const d = gk.st.keep + dice.roll() + (gd === 0 ? 1 : 0);
       if (d > a) { s.ball.hex = hexOf(gk); s.ball.owner = gk.id; ev.push({ e: "saved", pid: gk.id, a, d }); return; }
       if (d === a) {
         const out = hexNbrs(to).filter(n => HEXES[n].kind === "field").sort((x, y) => x - y);
