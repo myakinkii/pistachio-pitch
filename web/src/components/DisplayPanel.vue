@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { prefs, store } from "../lib/game.ts";
+import { album } from "../lib/album.ts";
 </script>
 
 <template>
@@ -11,6 +12,7 @@ import { prefs, store } from "../lib/game.ts";
       <label class="ctl" title="Shortcut: V"><input type="checkbox" v-model="prefs.control"> Show control (magenta Kernels, coffee Shells)</label>
       <label class="ctl slider">Pitch colours <input type="range" min="10" max="100" step="5" v-model.number="prefs.tint" aria-label="Pitch colour strength"></label>
       <button type="button" title="Shortcut: L" @click="store.labOpen = true">Open the formation lab</button>
+      <button type="button" title="Shortcut: A" @click="album.open = true">Open the sticker album</button>
     </div>
   </details>
 </template>

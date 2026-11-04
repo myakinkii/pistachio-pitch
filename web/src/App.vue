@@ -11,7 +11,9 @@ import NotationPanel from "./components/NotationPanel.vue";
 import HowItPlays from "./components/HowItPlays.vue";
 import CommentaryList from "./components/CommentaryList.vue";
 import FormationLab from "./components/FormationLab.vue";
+import AlbumDialog from "./components/AlbumDialog.vue";
 import { store, prefs, step, schedule } from "./lib/game.ts";
+import { album } from "./lib/album.ts";
 
 function onKey(e: KeyboardEvent) {
   const t = e.target as HTMLInputElement;
@@ -22,10 +24,11 @@ function onKey(e: KeyboardEvent) {
   else if (k === "v") prefs.control = !prefs.control;
   else if (k === "r") prefs.rot = prefs.rot ? 0 : 90;
   else if (k === "l") store.labOpen = !store.labOpen;
+  else if (k === "a") album.open = !album.open;
   else if (store.view !== null && (e.key === "ArrowRight" || e.key === "ArrowLeft")) step(e.key === "ArrowRight" ? 1 : -1);
 }
-// #lab opens the formation lab directly (a plain hash, as artifact links allow)
-const fromHash = () => { if (location.hash === "#lab") store.labOpen = true; };
+// #lab opens the formation lab directly, #album the sticker album (plain hashes, as artifact links allow)
+const fromHash = () => { if (location.hash === "#lab") store.labOpen = true; if (location.hash === "#album") album.open = true; };
 onMounted(() => { document.addEventListener("keydown", onKey); window.addEventListener("hashchange", fromHash); fromHash(); schedule(); });
 onBeforeUnmount(() => { document.removeEventListener("keydown", onKey); window.removeEventListener("hashchange", fromHash); });
 </script>
@@ -45,5 +48,6 @@ onBeforeUnmount(() => { document.removeEventListener("keydown", onKey); window.r
       <CommentaryList />
     </aside>
     <FormationLab />
+    <AlbumDialog />
   </main>
 </template>

@@ -175,3 +175,59 @@ details p{font-size:14px;margin:8px 0}
 .lab-options ol{margin:4px 0 0;padding-left:20px;font-size:13.5px;columns:2;column-gap:24px}
 .lab-options li{margin-bottom:3px;break-inside:avoid}
 @media (max-width:800px){.lab-options ol{columns:1}}
+/* sticker album */
+.album{--common:#5b7a3a;--rare:#3c5fa8;--legendary:#c08a1e}
+.album .lab-head{gap:12px}
+.al-sum{flex:1;font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}
+.al-tabs{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0}
+.al-team{margin-left:auto;display:flex;gap:10px;align-items:center;font-size:14px;color:var(--muted)}
+.al-body{max-height:calc(94vh - 130px);overflow:auto;padding:2px}
+.al-body h3{font-size:17px;margin:10px 0 8px}
+.al-body h3 span{font-weight:400;color:var(--muted);font-size:14px;margin-left:6px}
+.al-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:10px}
+.al-grid.small{grid-template-columns:repeat(auto-fill,minmax(118px,1fr))}
+.al-note{font-size:14px;color:var(--muted);margin:6px 0}
+.al-machine{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:6px 0 10px}
+.al-open{font-size:17px;padding:10px 20px}
+.sticker{position:relative;margin:0;display:flex;flex-direction:column;border:2px solid var(--common);border-radius:10px;background:var(--paper);overflow:hidden}
+.sticker.rare{border-color:var(--rare)}
+.sticker.legendary{border-color:var(--legendary);box-shadow:0 0 0 2px color-mix(in srgb,var(--legendary) 35%,transparent)}
+.st-top{display:flex;justify-content:space-between;padding:2px 8px;font-size:12px;font-weight:700;color:#fff;background:var(--common)}
+.rare .st-top{background:var(--rare)}
+.legendary .st-top{background:var(--legendary)}
+.st-portrait{background:#2f3a2a}
+.rare .st-portrait{background:#263452}
+.legendary .st-portrait{background:#5a4214}
+.st-portrait svg,.al-mini svg{display:block;width:100%;height:auto;image-rendering:pixelated}
+.sticker figcaption{display:flex;flex-direction:column;gap:2px;padding:4px 8px 6px;font-size:12px;line-height:1.3}
+.st-name{font-weight:700;font-size:13px}
+.st-stats{display:flex;flex-wrap:wrap;gap:0 6px;color:var(--muted);font-variant-numeric:tabular-nums}
+.st-stats b{color:var(--ink)}
+.st-bonus{color:var(--ink)}
+.st-bonus i{display:block;color:var(--muted)}
+.sticker.empty{border-style:dashed;border-color:var(--line);background:transparent}
+.sticker.empty .st-top{background:transparent;color:var(--muted)}
+.sticker.empty .st-portrait{background:transparent;color:var(--line);padding:8px}
+.sticker.empty .st-name{color:var(--muted);font-weight:400}
+.st-count,.st-badge{position:absolute;top:22px;right:6px;font-size:12px;font-weight:700;padding:1px 6px;border-radius:8px;background:var(--surface);color:var(--ink);border:1.5px solid var(--line)}
+.st-badge.new{background:#e0412e;color:#fff;border-color:#e0412e}
+.st-badge.dupe{color:var(--muted)}
+.al-reveal .sticker{animation:al-flip .45s ease-out both}
+@keyframes al-flip{from{transform:rotateY(90deg) scale(.9);opacity:0}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){.al-reveal .sticker{animation:none}}
+.al-roster{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px}
+.al-spot{display:flex;gap:10px;align-items:center;width:100%;text-align:left;padding:6px 10px}
+.al-roster li.on .al-spot{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+.al-mini{flex:none;width:52px;border-radius:6px;overflow:hidden;background:#2f3a2a}
+.al-mini.ph{opacity:.45}
+.al-spot-txt{display:flex;flex-direction:column;font-size:14px;min-width:0}
+.al-spot-txt small{color:var(--muted);font-size:12px}
+.al-picker{margin-top:12px;padding-top:8px;border-top:1.5px solid var(--line)}
+.al-choice{padding:0;border:none;background:none;border-radius:10px;text-align:left}
+.al-choice.used{opacity:.55}
+.al-choice:hover .sticker{border-color:var(--accent)}
+.al-lab section{margin-bottom:8px}
+.al-form{display:flex;flex-wrap:wrap;gap:10px 18px}
+.al-form input{width:84px;font:inherit;font-size:14px;color:var(--ink);background:var(--surface);border:1.5px solid var(--line);border-radius:10px;padding:5px 8px}
+.al-table{max-width:420px}
+.al-table td:not(:first-child),.al-table th{text-align:right;font-variant-numeric:tabular-nums}

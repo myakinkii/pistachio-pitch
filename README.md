@@ -60,7 +60,11 @@ the page and the CLI run the same engine with the same seeded dice.
   and the gaps between lines); and `coach.ts`,
   the model-agnostic LLM coach: give it an `ask(prompt)` function.
 - `src/commentary.ts`: commentary lines from match events.
-- `src/cli.ts`: replay, verify and self-play.
+- `src/album/`: the season sticker album (packs, collection, roster), with its
+  seasons in `data/seasons/` and pixel portraits drawn by `tools/art/`; see
+  [docs/album.md](docs/album.md) and the odds in [docs/gacha.md](docs/gacha.md).
+  Not wired into matches yet.
+- `src/cli.ts`: replay, verify, self-play and `album simulate`.
 - `data/`: `formations.json` (each formation's style, and every player's position,
   kick-off spot and target spot, in spot numbers from the Kernels' side) and
   `builds.json` (stats by position). Edit them to change formations; match files

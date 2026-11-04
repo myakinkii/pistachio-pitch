@@ -3,6 +3,7 @@
 //
 //   node src/cli.ts replay match.ppn [--verify] [--board] [--to N]
 //   node src/cli.ts selfplay [--seed S] [--ap 7] [--turns 40] [-o out.ppn] [--k bot|advisor|claude] [--s bot|advisor|claude]
+//   node src/cli.ts album simulate [--packs 20] [--players 1000] [--cards 4] [--seed S]
 //
 // Claude self-play calls the Anthropic API: set ANTHROPIC_API_KEY (and optionally
 // --model, default claude-sonnet-5-5).
@@ -13,6 +14,7 @@ import { botTurn } from "./ai/bot.ts";
 import { coachTurn, describe } from "./ai/coach.ts";
 import { advisorTurn } from "./ai/advisor.ts";
 import { development, chain, coverage, shapes } from "./ai/tempo.ts";
+import { SEASON, TIERS, expected, simulate } from "./album/index.ts";
 
 function args(argv: string[]) {
   const out: Record<string, string | boolean> = {}, pos: string[] = [];
@@ -86,7 +88,19 @@ async function main() {
     }
     return;
   }
-  console.log("usage:\n  pp replay file.ppn [--verify] [--board] [--to N]\n  pp tempo [--ap 7]\n  pp selfplay [--seed S] [--ap 7] [--turns 40] [-o out.ppn] [--k bot|advisor|claude] [--s bot|advisor|claude] [--model id]");
+  if (cmd === "album") {
+    if (pos[0] !== "simulate") throw new Error("usage: album simulate [--packs 20] [--players 1000] [--cards 4] [--seed S]");
+    const packs = Number(opts.packs ?? 20), players = Number(opts.players ?? 1000);
+    const settings = { ...SEASON.pack, cards: Number(opts.cards ?? SEASON.pack.cards) };
+    const total = SEASON.stickers.length, e = expected(SEASON, settings, packs);
+    const r = simulate(SEASON, settings, packs, players, String(opts.seed ?? "sim"));
+    const pct = (n: number) => `${Math.round(n / total * 100)}%`;
+    console.log(`${SEASON.title}: ${total} stickers, ${settings.cards} a pack, ${packs} packs, ${players} players`);
+    console.log(`  expected ${e.all.toFixed(1)} (${pct(e.all)}): ${TIERS.map(t => `${t} ${e[t].toFixed(1)}/${SEASON.stickers.filter(s => s.tier === t).length}`).join(", ")}`);
+    console.log(`  simulated mean ${r.mean.toFixed(1)} (${pct(r.mean)}), 10% of players below ${r.p10}, median ${r.median}, 10% above ${r.p90}, complete ${r.complete}`);
+    return;
+  }
+  console.log("usage:\n  pp replay file.ppn [--verify] [--board] [--to N]\n  pp tempo [--ap 7]\n  pp selfplay [--seed S] [--ap 7] [--turns 40] [-o out.ppn] [--k bot|advisor|claude] [--s bot|advisor|claude] [--model id]\n  pp album simulate [--packs 20] [--players 1000] [--cards 4] [--seed S]");
 }
 
 const label = (k: string) => (k === "claude" ? "Claude" : k === "advisor" ? "Advisor" : "Bot");
