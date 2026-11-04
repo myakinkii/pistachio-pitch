@@ -53,15 +53,15 @@ export function development(formation: string, apPerTurn = 7): Development {
 
 export interface Chain { passes: number; path: number[]; safe: number; reached: boolean }
 /**
- * The keeper's way to the opponent's box: passes between teammates (up to the
+ * The keeper's (or another starting player's) way to the opponent's box: passes between teammates (up to the
  * passing range, 1 AP each) to someone on or next to the opponent's penalty spot.
  * Among the chains with the fewest passes, the one most likely to get through.
  * If nobody is near the spot, `reached` is false and the chain ends at the
  * player closest to it.
  */
-export function chain(s: State, team: TeamId): Chain {
+export function chain(s: State, team: TeamId, fromNum?: number): Chain {
   const mine = s.players.filter(p => p.team === team);
-  const gk = mine.find(p => p.role === "GK")!, spot = PENALTY_SPOT[other(team)];
+  const gk = mine.find(p => (fromNum === undefined ? p.role === "GK" : p.num === fromNum))!, spot = PENALTY_SPOT[other(team)];
   const hex = (n: number) => segHex(mine.find(p => p.num === n)!.seg);
   let goal = mine.filter(p => p !== gk && hexDist(segHex(p.seg), spot) <= 1).map(p => p.num);
   const reached = goal.length > 0;

@@ -42,3 +42,21 @@ test("a chain starts with the keeper, every pass is in range, and both sides mea
     assert.ok(Math.abs(k.safe - sh.safe) < 1e-9, n);
   }
 });
+
+import { passOdds, analyze } from "../src/ai/odds.ts";
+
+test("a chain can start from the player with the ball", () => {
+  const s = shapes("4-4-2", "5-4-1");
+  const c = chain(s, "K", 9);
+  assert.equal(c.path[0], 9);
+});
+
+test("passOdds agrees with the coach's analysis of the same pass", () => {
+  const s = shapes("4-4-2", "5-4-1");
+  const p = s.players.find(x => x.team === "K" && x.num === 9)!;
+  s.ball = { hex: segHex(p.seg), owner: p.id }; s.turn = "K"; s.ap = 7;
+  const opt = analyze(s).options.find(o => o.kind === "pass" && o.cmd === "#9>#10")!;
+  const mate = s.players.find(x => x.team === "K" && x.num === 10)!;
+  const o = passOdds(s, p, segHex(mate.seg));
+  assert.match(opt.text, new RegExp(`arrives ${Math.round(o.arrive * 100)}%`));
+});

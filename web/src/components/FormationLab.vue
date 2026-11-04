@@ -8,7 +8,9 @@ import {
   type TeamId,
 } from "../../../src/engine/index.ts";
 import { chain } from "../../../src/ai/tempo.ts";
-import { DEFS, staticBoard, viewBox, pieceSvg, controlSvg, centre, R, HH } from "../lib/draw.ts";
+import { analyze, passOdds, pct } from "../../../src/ai/odds.ts";
+import { reach, passTargets, playerById } from "../../../src/engine/index.ts";
+import { DEFS, BALL, staticBoard, viewBox, pieceSvg, controlSvg, ballTransform, centre, segPts, segCentroid, upright, playerName, R, HH } from "../lib/draw.ts";
 import { store, prefs } from "../lib/game.ts";
 
 type Draft = Record<string, { style: string; players: { pos: string; kickoff: number; target: number }[] }>;
@@ -21,7 +23,9 @@ function fromEngine(): Draft {
 }
 const draft = reactive<Draft>(fromEngine());
 const edited = ref(false);
-const pick = reactive({ K: "4-4-2", S: "5-4-1", mode: "target" as "target" | "kickoff", numbers: true });
+const pick = reactive({ K: "4-4-2", S: "5-4-1", mode: "target" as "target" | "kickoff", numbers: true, ball: false });
+const ballAt = ref<string | null>(null);   // who has the ball ("K10"), with the Ball tool
+const preview = ref<number | null>(null);  // pass target under the pointer
 const sel = ref<string | null>(null);   // "K7"
 const note = ref("");
 
@@ -36,14 +40,55 @@ const state = computed(() => {
     const [q, r] = mirror(team, HEXES[h].q, HEXES[h].r);
     s.players.find(x => x.team === team && x.num === i + 1)!.seg = hexAt(q, r)! * 6 + (team === "K" ? 1 : 4);
   });
+  // the ball at a player's feet makes his side the one to move, with a full turn of AP
+  const c = ballAt.value ? playerById(s, ballAt.value) : undefined;
+  if (c) { s.ball = { hex: segHex(c.seg), owner: c.id }; s.turn = c.team; s.ap = s.apPerTurn; }
   return s;
 });
+const carrierP = computed(() => (ballAt.value ? playerById(state.value, ballAt.value) : undefined));
+/** The carrier's options, as in a match: where he can dribble (with costs), and every pass and shot target. */
+const ballLayers = computed(() => {
+  const s = state.value, c = carrierP.value, rot = prefs.rot;
+  if (!c) return { lo: "", tp: "", threats: new Set<string>() };
+  let lo = "", tp = "";
+  for (const [seg, cost] of reach(s, c).cost) {
+    const cc = segCentroid(seg);
+    lo += `<polygon class="t-move lab-reach" points="${segPts(seg)}"/><text class="cost" x="${cc.x.toFixed(1)}" y="${(cc.y + 3).toFixed(1)}"${upright(rot, cc.x, cc.y)}>${cost}</text>`;
+  }
+  const threats = new Set<string>();
+  if (preview.value !== null) {
+    const o = passOdds(s, c, preview.value), a = centre(s.ball.hex), b = centre(preview.value);
+    for (const t of o.threats) threats.add(t.split(" ")[0].replace("(reserve)", ""));
+    for (const id of o.opps) threats.add(id);
+    lo += `<line class="pv-under" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"/><line class="pv" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"/>`;
+  }
+  for (const h of passTargets(s, c)) {
+    const p = centre(h), on = preview.value === h;
+    tp += `<circle class="t-pass-mark${on ? " on" : ""}" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${on ? 14 : 12.5}"/><circle class="t-pass" data-act="lab-pass" data-hex="${h}" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="14"/>`;
+  }
+  return { lo, tp, threats };
+});
+/** Words for the pass or shot under the pointer. */
+const passText = computed(() => {
+  const c = carrierP.value;
+  if (!c || preview.value === null) return "";
+  const s = state.value, o = passOdds(s, c, preview.value), spot = HEXES[preview.value].num;
+  const who = (id: string) => playerName(playerById(s, id)!);
+  const lane = o.threats.length ? `lane threatened by ${o.threats.map(t => { const [id, ...rest] = t.split(" "); return `${who(id.replace("(reserve)", ""))}${id.includes("reserve") ? " from reserve" : ""} (${rest.join(" ")})`; }).join(", ")}` : "the lane is clear";
+  if (o.shot) return `Shot at spot ${spot}: goal ${pct(o.goal!)}; ${lane}; ${o.keeper}.`;
+  const end = o.mates.length && o.opps.length ? `${who(o.mates[0])} has to win it against ${o.opps.map(who).join(", ")}`
+    : o.opps.length ? `${o.opps.map(who).join(", ")} stands there and wins it`
+    : o.mates.length ? `${who(o.mates[0])} receives it` : "nobody there: a through ball into space";
+  return `Pass to spot ${spot}: arrives ${pct(o.arrive)}; ${lane}; ${end}.`;
+});
+/** The top options the coach and the advisor would see in this position. */
+const coachOptions = computed(() => (carrierP.value ? analyze(state.value).options.slice().sort((a, b) => b.score - a.score).slice(0, 8) : []));
 const staticHtml = computed(() => staticBoard(prefs.rot, true));
 const spotsHtml = computed(() => HEXES.map(h => {
   const c = centre(h.id);
   return `<circle class="lab-spot" data-act="lab-spot" data-hex="${h.id}" cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${(R * .82).toFixed(1)}"/>`;
 }).join(""));
-const piecesHtml = computed(() => state.value.players.map(p => pieceSvg(p, { rot: prefs.rot, act: "lab-piece", selected: sel.value === p.id, mine: true })).join(""));
+const piecesHtml = computed(() => state.value.players.map(p => pieceSvg(p, { rot: prefs.rot, act: "lab-piece", selected: sel.value === p.id, threat: ballLayers.value.threats.has(p.id), mine: true })).join(""));
 
 const counts = computed(() => {
   const ctl = control(state.value);
@@ -63,9 +108,11 @@ const tempo = computed(() => {
     const spots = players.map(p => hexDist(hexByNum(p.kickoff)!, hexByNum(p.target)!));
     const ap = spots.reduce((a, b) => a + b, 0);
     const turns = Math.max(Math.ceil(ap / 7), ...players.map((p, i) => Math.ceil(spots[i] / (1 + BUILDS[p.pos].pac))));
-    const c = chain(state.value, t);
-    const ch = c.passes === Infinity ? "no passing chain to the box"
-      : `keeper to the box in ${c.passes} pass${c.passes === 1 ? "" : "es"}, ${Math.round(c.safe * 100)}% clear${c.reached ? "" : " (nobody next to the penalty spot)"}`;
+    const from = carrierP.value && carrierP.value.team === t ? carrierP.value : undefined;
+    const c = chain(state.value, t, from?.num);
+    const start = from ? `#${from.num} with the ball` : "keeper";
+    const ch = c.passes === Infinity ? `no passing chain from the ${start} to the box`
+      : `${start} to the box in ${c.passes} pass${c.passes === 1 ? "" : "es"}, ${Math.round(c.safe * 100)}% clear${c.reached ? "" : " (nobody next to the penalty spot)"}`;
     return `develops in ${turns} turn${turns === 1 ? "" : "s"} (${ap} AP); ${ch}`;
   };
   return { K: one("K"), S: one("S") };
@@ -74,8 +121,16 @@ const tempo = computed(() => {
 function onClick(e: MouseEvent) {
   const el = (e.target as Element).closest("[data-act]") as HTMLElement | null;
   if (!el) { sel.value = null; return; }
+  if (el.dataset.act === "lab-pass") { preview.value = Number(el.dataset.hex); return; }   // a tap on touch screens
+  if (el.dataset.act === "lab-piece" && pick.ball) { ballAt.value = ballAt.value === el.dataset.id ? null : el.dataset.id!; preview.value = null; sel.value = null; return; }
   if (el.dataset.act === "lab-piece") { sel.value = sel.value === el.dataset.id ? null : el.dataset.id!; note.value = ""; return; }
   if (el.dataset.act === "lab-spot" && sel.value) moveTo(Number(el.dataset.hex));
+}
+function onOver(e: PointerEvent) {
+  if (e.pointerType === "touch") return;
+  const el = (e.target as Element).closest('[data-act="lab-pass"]') as HTMLElement | null;
+  const n = el ? Number(el.dataset.hex) : null;
+  if (n !== preview.value) preview.value = n;
 }
 /** Move the selected player to a spot (given on the board, so mirrored back for the Shells). */
 function moveTo(hex: number) {
@@ -120,6 +175,7 @@ async function copy() {
         <label class="ctl"><input type="radio" value="target" v-model="pick.mode"> Target shapes</label>
         <label class="ctl"><input type="radio" value="kickoff" v-model="pick.mode"> Kick-off</label>
         <label class="ctl"><input type="checkbox" v-model="pick.numbers"> Spot numbers</label>
+        <label class="ctl" title="Then click a pistachio to give him the ball"><input type="checkbox" v-model="pick.ball" @change="!pick.ball && (ballAt = null, preview = null)"> Ball</label>
       </div>
       <label class="ctl">Shells <select v-model="pick.S"><option v-for="n in FORMATION_NAMES" :key="n" :value="n">{{ n }}, {{ draft[n].style }}</option></select></label>
     </div>
@@ -132,18 +188,25 @@ async function copy() {
       <span>Shells {{ tempo.S }}</span>
     </p>
     <svg class="lab-pitch" :class="{ 'no-coords': !pick.numbers }" :style="{ '--tint': prefs.tint / 100 }" :viewBox="viewBox(prefs.rot)"
-      role="img" aria-label="Both formations on the pitch, with who controls which segments" @click="onClick">
+      role="img" aria-label="Both formations on the pitch, with who controls which segments" @click="onClick" @pointerover="onOver">
       <defs v-html="DEFS" />
       <g :transform="prefs.rot ? `rotate(${-prefs.rot})` : undefined">
         <g v-html="staticHtml" />
         <g v-html="controlSvg(state)" />
         <g v-html="spotsHtml" />
+        <g v-html="ballLayers.lo" />
         <g v-html="piecesHtml" />
+        <g v-if="carrierP" :style="{ transform: ballTransform(state) }" v-html="BALL" pointer-events="none" />
+        <g v-html="ballLayers.tp" />
       </g>
     </svg>
     <p class="small" aria-live="polite">
-      {{ note || (sel ? "Now click the spot to move him to (a teammate already there swaps places)." : counts.shared ? `${counts.shared} spot${counts.shared > 1 ? "s are" : " is"} shared: the split segments are contested ground.` : "Click a pistachio, then a spot, to move him. Positions are written from the Kernels’ side; the Shells mirror them.") }}
+      {{ note || passText || (pick.ball && !carrierP ? "Click a pistachio to give him the ball." : carrierP ? `${playerName(carrierP)} has the ball: segments show where he can dribble and what it costs; hover a ring to see a pass or shot.` : "") || (sel ? "Now click the spot to move him to (a teammate already there swaps places)." : counts.shared ? `${counts.shared} spot${counts.shared > 1 ? "s are" : " is"} shared: the split segments are contested ground.` : "Click a pistachio, then a spot, to move him. Positions are written from the Kernels’ side; the Shells mirror them.") }}
     </p>
+    <div v-if="coachOptions.length" class="lab-options">
+      <p class="log-head">What the coach would see</p>
+      <ol><li v-for="o in coachOptions" :key="o.cmd + o.kind">{{ o.text }}</li></ol>
+    </div>
     <div class="row">
       <button type="button" class="strong" @click="copy">Copy as JSON</button>
       <button type="button" :disabled="!edited" @click="reset">Reset</button>

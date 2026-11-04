@@ -41,6 +41,30 @@ export function laneSafety(s: State, p: Player, from: number, to: number, shot: 
 }
 
 export const pct = (x: number) => `${Math.round(x * 100)}%`;
+
+/**
+ * Everything about one pass or shot from the ball's spot by its carrier `p` to
+ * spot `to`: the chance it gets past the lane, who threatens it, and what waits
+ * at the end (a teammate, a contest, an opponent, empty space, or the keeper).
+ */
+export function passOdds(s: State, p: Player, to: number) {
+  const team = p.team, from = s.ball.hex, shot = attackGoal(team).includes(to);
+  const lane = laneSafety(s, p, from, to, shot);
+  const here = inHex(s, to).filter(x => x !== p);
+  const mates = here.filter(x => x.team === team), opps = here.filter(x => x.team !== team);
+  let arrive = lane.safe, goal: number | undefined, keeper = "";
+  if (shot) {
+    const gk = s.players.find(x => x.team !== team && x.role === "GK")!;
+    const gd = hexDist(hexOf(gk), to), dist = hexDist(from, to);
+    let g = 1;
+    if (gd <= 1) { g = duelOdds(p.st.sho - Math.max(0, dist - 2), gk.st.kee + (gd === 0 ? 1 : 0)).win; keeper = gd === 0 ? "the keeper is on that spot" : "the keeper is next to it"; }
+    else keeper = "the keeper can’t reach it";
+    goal = lane.safe * g;
+  } else if (opps.length && mates.length) {
+    arrive *= duelOdds(mates[0].st.dri + edge(mates[0], opps[0]), opps[0].st.def + majority(s, to, opps[0].team) + edge(opps[0], mates[0])).win;
+  } else if (opps.length) arrive = 0;
+  return { shot, lane: lane.safe, threats: lane.threats, arrive, goal, keeper, mates: mates.map(x => x.id), opps: opps.map(x => x.id) };
+}
 /** The PHY edge in duels: +1 for the physically stronger of the two. */
 const edge = (a: Player, b: Player) => (a.st.phy > b.st.phy ? 1 : 0);
 
