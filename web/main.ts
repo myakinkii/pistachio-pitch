@@ -90,8 +90,8 @@ function buildBoard() {
     ? `${minY.toFixed(1)} ${-maxX} ${(maxY - minY).toFixed(1)} ${maxX - minX}`
     : `${minX} ${minY.toFixed(1)} ${maxX - minX} ${(maxY - minY).toFixed(1)}`);
   svg.innerHTML = `<defs>
-  <linearGradient id="kernelG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#b5cf63"/><stop offset=".55" stop-color="#6f9234"/><stop offset="1" stop-color="#8a4865"/></linearGradient>
-  <radialGradient id="shellG" cx=".4" cy=".35" r=".8"><stop offset="0" stop-color="#f7efde"/><stop offset="1" stop-color="#cdb88e"/></radialGradient>
+  <clipPath id="clipK"><ellipse rx="9" ry="13"/></clipPath>
+  <clipPath id="clipS"><ellipse rx="9.4" ry="13.4"/></clipPath>
   <clipPath id="ballClip"><circle r="12"/></clipPath>
   <filter id="drop" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="1.2" stdDeviation="1.1" flood-opacity=".45"/></filter>
 </defs><g${ROT ? ` transform="rotate(${-ROT})"` : ""}><g>${buildStatic()}</g><g id="low"></g><g id="coordLets" pointer-events="none">${lettersSvg()}</g><g id="ball">${ballSvg}</g><g id="top"></g></g>`;
@@ -109,12 +109,15 @@ function placeStatus() {
 try { if (localStorage.getItem("pp-rot") === "90") ROT = 90; } catch { /* storage unavailable */ }
 buildBoard();
 
+// Team kits (see pieceSvg): first colour is the shirt, second the hoops or stripes.
+const KIT = { K1: "#9fcb3a", K2: "#9c2e6b", S1: "#ecdfbf", S2: "#6b4426" };
+
 // ---------- state ----------
 type Side = "human" | "bot" | "advisor" | "claude";
 const isLocalAi = (x: Side) => x === "bot" || x === "advisor";
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const TEAM: Record<TeamId, { name: string; one: string; chip: string }> = {
-  K: { name: "Kernels", one: "Kernel", chip: "#7c9d3b" }, S: { name: "Shells", one: "Shell", chip: "#d9c49a" },
+  K: { name: "Kernels", one: "Kernel", chip: "#9fcb3a" }, S: { name: "Shells", one: "Shell", chip: "#6b4426" },
 };
 let match = new Match({ seed: randomSeed() });
 let view: number | null = null;           // replay position, or null for the live match
@@ -268,13 +271,19 @@ const setAiNote = (t: string) => { $("aiNote").textContent = t; };
 function pieceSvg(p: Player, mine: boolean, selected: boolean, threat: boolean) {
   const c = segCentroid(p.seg), a = 30 + 60 * (p.seg % 6);
   const jit = ((p.num * 37 + (p.team === "K" ? 0 : 13)) % 17) - 8, rot = a - 90 + jit;
-  // A contrasting halo (white round the green kernels, dark round the pale shells) keeps them visible on every colour.
+  // Kits: Kernels in pistachio green with a magenta hoop, Shells in cream with a coffee stripe (the seam);
+  // keepers wear the colours reversed. A contrasting halo keeps them visible on every zone colour.
+  const gk = p.role === "GK";
   const body = p.team === "K"
-    ? `<ellipse rx="10" ry="14" class="halo K"/><ellipse rx="9" ry="13" fill="url(#kernelG)" stroke="#2a1f22" stroke-width="1.5"/><path d="M-2.8 -9 Q-6.2 0 -1.7 9" stroke="rgba(255,255,255,.4)" stroke-width="1.7" fill="none"/>`
-    : `<ellipse rx="10.4" ry="14.4" class="halo S"/><ellipse rx="9.4" ry="13.4" fill="url(#shellG)" stroke="#6b5430" stroke-width="1.5"/><path d="M.8 -12.8 Q3.4 0 .8 12.8" stroke="#8a7146" stroke-width="1.1" fill="none"/>`;
+    ? `<ellipse rx="10" ry="14" class="halo K"/><g clip-path="url(#clipK)"><rect x="-9" y="-13" width="18" height="26" fill="${gk ? KIT.K2 : KIT.K1}"/>` +
+      `<rect x="-9" y="-2.8" width="18" height="5.6" fill="${gk ? KIT.K1 : KIT.K2}"/></g>` +
+      `<ellipse rx="9" ry="13" fill="none" stroke="#2a1f22" stroke-width="1.5"/>`
+    : `<ellipse rx="10.4" ry="14.4" class="halo S"/><g clip-path="url(#clipS)"><rect x="-9.4" y="-13.4" width="18.8" height="26.8" fill="${gk ? KIT.S2 : KIT.S1}"/>` +
+      `<rect x="-2.3" y="-13.4" width="4.6" height="26.8" fill="${gk ? KIT.S1 : KIT.S2}"/></g>` +
+      `<ellipse rx="9.4" ry="13.4" fill="none" stroke="#4a3018" stroke-width="1.5"/>`;
   const ring = selected ? `<ellipse rx="13.5" ry="17.5" class="ring-sel"/>` : threat ? `<ellipse rx="13.5" ry="17.5" class="threat"/>` : "";
   const res = p.reserve ? Array.from({ length: p.reserve }, (_, i) => `<circle class="reserve" cx="${(9 + i * 6).toFixed(1)}" cy="-12" r="2.8"/>`).join("") : "";
-  return `<g class="piece${mine ? " mine" : ""}" data-act="piece" data-id="${p.id}"${mine ? ' tabindex="0"' : ""} aria-label="${name(p)}" transform="translate(${c.x.toFixed(1)} ${c.y.toFixed(1)}) rotate(${rot})">${ring}<g filter="url(#drop)">${body}</g>${res}<text y="3.4" class="num ${p.team}" transform="rotate(${-rot + ROT})">${p.num}</text></g>`;
+  return `<g class="piece${mine ? " mine" : ""}" data-act="piece" data-id="${p.id}"${mine ? ' tabindex="0"' : ""} aria-label="${name(p)}" transform="translate(${c.x.toFixed(1)} ${c.y.toFixed(1)}) rotate(${rot})">${ring}<g filter="url(#drop)">${body}</g>${res}<text y="3.4" class="num ${p.team}${gk ? " gk" : ""}" transform="rotate(${-rot + ROT})">${p.num}</text></g>`;
 }
 
 function renderBoard() {

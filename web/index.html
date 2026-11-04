@@ -16,9 +16,9 @@
   <aside class="panel">
     <div class="score" id="scoreBox" aria-label="Score">
       <h1 class="title">Calcio Pistacchio</h1>
-      <div class="team K"><svg viewBox="-12 -16 24 32" aria-hidden="true"><ellipse rx="10.5" ry="14.5" fill="#7c9d3b" stroke="#3a2a2e" stroke-width="1.2"/></svg><span id="nameK">Kernels</span></div>
+      <div class="team K"><svg viewBox="-12 -16 24 32" aria-hidden="true"><clipPath id="miniK"><ellipse rx="10.5" ry="14.5"/></clipPath><g clip-path="url(#miniK)"><rect x="-11" y="-15" width="22" height="30" fill="#9fcb3a"/><rect x="-11" y="-3.5" width="22" height="7" fill="#9c2e6b"/></g><ellipse rx="10.5" ry="14.5" fill="none" stroke="#2a1f22" stroke-width="1.4"/></svg><span id="nameK">Kernels</span></div>
       <div class="nums"><span id="sK">0</span><span>:</span><span id="sS">0</span></div>
-      <div class="team S"><span id="nameS">Shells</span><svg viewBox="-12 -16 24 32" aria-hidden="true"><ellipse rx="11" ry="15" fill="#e3d4b2" stroke="#8a7249" stroke-width="1.2"/></svg></div>
+      <div class="team S"><span id="nameS">Shells</span><svg viewBox="-12 -16 24 32" aria-hidden="true"><clipPath id="miniS"><ellipse rx="11" ry="15"/></clipPath><g clip-path="url(#miniS)"><rect x="-11" y="-15" width="22" height="30" fill="#ecdfbf"/><rect x="-3" y="-15" width="6" height="30" fill="#6b4426"/></g><ellipse rx="11" ry="15" fill="none" stroke="#4a3018" stroke-width="1.4"/></svg></div>
       <select id="sideK" class="side K" aria-label="Who plays the Kernels"><option value="human">You</option><option value="bot">Bot</option><option value="advisor">Advisor</option><option value="claude">Claude</option></select>
       <span class="vs" aria-hidden="true">–</span>
       <select id="sideS" class="side S" aria-label="Who plays the Shells"><option value="human">You</option><option value="bot" selected>Bot</option><option value="advisor">Advisor</option><option value="claude">Claude</option></select>

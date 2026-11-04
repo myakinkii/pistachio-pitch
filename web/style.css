@@ -1,18 +1,18 @@
 @import url("https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Permanent+Marker&display=swap");
 :root{
   --paper:#e9edf5;--surface:#ffffff;--ink:#1a2040;--muted:#59618a;--line:#d3d9e8;
-  --accent:#2449a8;--kernel:#5f8a2c;--shell:#a88d58;--warn:#c4372a;
+  --accent:#2449a8;--kernel:#7fae22;--shell:#6b4426;--warn:#c4372a;
   color-scheme:light;
 }
 @media (prefers-color-scheme:dark){
   :root:not([data-theme="light"]){
     --paper:#10142a;--surface:#1a1f3a;--ink:#eceff9;--muted:#a3a9c6;--line:#2d3458;
-    --accent:#8aa5ff;--kernel:#a3cf63;--shell:#dcc79c;--warn:#ff7d6e;color-scheme:dark;
+    --accent:#8aa5ff;--kernel:#b5dd5c;--shell:#c89a6c;--warn:#ff7d6e;color-scheme:dark;
   }
 }
 :root[data-theme="dark"]{
   --paper:#10142a;--surface:#1a1f3a;--ink:#eceff9;--muted:#a3a9c6;--line:#2d3458;
-  --accent:#8aa5ff;--kernel:#a3cf63;--shell:#dcc79c;--warn:#ff7d6e;color-scheme:dark;
+  --accent:#8aa5ff;--kernel:#b5dd5c;--shell:#c89a6c;--warn:#ff7d6e;color-scheme:dark;
 }
 :root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 *,*::before,*::after{box-sizing:inherit}
@@ -116,8 +116,9 @@ details p{font-size:14px;margin:8px 0}
 .no-coords #coordNums,.no-coords #coordLets{display:none}
 .piece.mine{cursor:pointer}
 .num{font:700 9.5px "Atkinson Hyperlegible",system-ui,sans-serif;text-anchor:middle;pointer-events:none}
-.num.K{fill:#fff;paint-order:stroke;stroke:#2c3a16;stroke-width:1.8}
-.num.S{fill:#4d3d1f}
+.num.K{fill:#fff;paint-order:stroke;stroke:#3d1430;stroke-width:2.2}
+.num.S{fill:#2b1a0c;paint-order:stroke;stroke:#ecdfbf;stroke-width:2.2}
+.num.S.gk{fill:#fff;stroke:#2b1a0c}
 .ring-sel{fill:none;stroke:#fff;stroke-width:3}
 .halo{fill:none;stroke-width:3.4}
 .halo.K{stroke:#fff}
