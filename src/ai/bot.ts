@@ -67,7 +67,7 @@ export function botCommand(s: State): Command {
   const bh = s.ball.hex;
   // Tackle the carrier if someone is already next to him.
   if (c) {
-    const tackler = mine.filter(m => hexOf(m) === bh && !s.beaten.includes(m.id)).sort((a, b) => b.st.tack - a.st.tack || a.num - b.num)[0];
+    const tackler = mine.filter(m => hexOf(m) === bh && !s.beaten.includes(m.id)).sort((a, b) => b.st.def - a.st.def || a.num - b.num)[0];
     if (tackler) return { t: "tackle", p: tackler.num, target: c.num };
   }
   // Otherwise send the closest outfield player who can reach the ball's hexagon, leaving 1 AP to act.

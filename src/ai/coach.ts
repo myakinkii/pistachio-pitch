@@ -7,7 +7,7 @@
 // error and the new position and may answer once more.
 
 import {
-  segName, hexName, hexOf, PASS_RANGE, MAX_RESERVE,
+  segName, hexName, hexOf, paceLeft, PASS_RANGE, MAX_RESERVE,
   RuleError, NotationError, type State, type Match, type TeamId,
 } from "../engine/index.ts";
 import { analyze, goalDist } from "./odds.ts";
@@ -42,8 +42,12 @@ Each turn your side has a pool of action points (AP) to spend on any players:
   and grab loose balls within one spot. Unused reserves expire when your next turn starts.
 - / ends the turn early. Losing the ball through your own action ends your turn at once.
 
-Stats (1-5): keepers are good at keeping, defenders at tackling, midfielders at passing and control,
-forwards at dribbling and shooting. Rolls are d6 + stat (+ bonuses); higher wins.
+Stats (1-5, each player's add up to 18): PAC pace (a player moves at most 1 + PAC spots per turn),
+SHO shooting, PAS passing, DRI dribbling and receiving, DEF tackling and intercepting, PHY physical
+(+1 in a duel against a weaker opponent), KEE keeping (keepers). Rolls are d6 + stat (+ bonuses);
+higher wins. Positions: GK keeper, CB centre-back, FB full-back, WB wing-back, DM holding midfielder,
+CM central midfielder, WM wide midfielder, W winger, ST striker, TS target striker. Use each player
+for what his build is good at: wingers and strikers run and dribble, CMs pass, CBs and DMs tackle.
 
 Direction: spot numbers grow by 9 per row going down the pitch. Kernels attack downwards (towards
 higher numbers), Shells upwards (towards lower numbers). "N from goal" in the options counts spots
@@ -92,12 +96,12 @@ export function describe(s: State): string {
 export function options(s: State): string {
   const team = s.turn, { summary, options: opts } = analyze(s);
   const roster = s.players.filter(p => p.team === team)
-    .map(p => `#${p.num} ${p.role} ${segName(p.seg)} (${goalDist(team, hexOf(p))} from goal)${p.reserve ? ` +${p.reserve}` : ""}${s.beaten.includes(p.id) ? " beaten" : ""}`).join("; ");
+    .map(p => `#${p.num} ${p.role} ${segName(p.seg)} (${goalDist(team, hexOf(p))} from goal; PAC${p.st.pac} SHO${p.st.sho} PAS${p.st.pas} DRI${p.st.dri} DEF${p.st.def} PHY${p.st.phy}${p.role === "GK" ? ` KEE${p.st.kee}` : ""}; can move ${paceLeft(s, p)} more spots)${p.reserve ? ` +${p.reserve}` : ""}${s.beaten.includes(p.id) ? " beaten" : ""}`).join("\n  ");
   const head: Record<string, string> = {
     shot: "Shots", pass: "Passes to feet", through: "Through balls into space", dribble: "Dribbles forward",
     run: "Runs into space (to receive a pass next)", press: "Win the ball back", reserve: "Reserves", loose: "Loose ball",
   };
-  const lines = [summary, `Your players: ${roster}`];
+  const lines = [summary, `Your players (formation ${s.formation[team]}):\n  ${roster}`];
   let last = "";
   for (const o of opts) {
     if (o.kind !== last) { lines.push(`${head[o.kind]}:`); last = o.kind; }

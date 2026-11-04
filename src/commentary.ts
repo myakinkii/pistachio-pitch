@@ -22,7 +22,7 @@ export function commentary(events: Ev[], before: State, after: State): Line[] {
       case "goal": {
         const spot = HEXES[before.ball.hex].num, p = before.players.find(x => x.id === e.pid);
         let text = `GOAL! ${who(e.pid)} scores from spot ${spot}. ${TEAM.K.name} ${after.score.K}, ${TEAM.S.name} ${after.score.S}.`;
-        if (isPrime(spot)) text += p?.role === "F" ? " The striker scores from a prime position!" : " A goal from a prime position!";
+        if (isPrime(spot)) text += p && ["ST", "TS", "W"].includes(p.role) ? " The striker scores from a prime position!" : " A goal from a prime position!";
         out.push({ text, big: true });
         break;
       }

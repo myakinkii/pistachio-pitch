@@ -12,19 +12,19 @@
 // Losing the ball through your own action is a turnover and ends your turn.
 
 import {
-  HEXES, CENTER, CENTRE_RING, KEEPER_HEX, GOAL, attackGoal, other, hexAt,
+  HEXES, CENTER, GOAL, attackGoal, other, hexAt,
   segHex, segExists, segIsGoal, hexSegs, hexDist, hexNbrs, cx, cy, segX, segY,
   segName, hexName, type TeamId,
 } from "./geometry.ts";
 import { Dice, seedState } from "./rng.ts";
+import { FORMATIONS, BUILDS, DEFAULT_FORMATION, mirror, type Stats } from "./squad.ts";
 
-export const RULES_VERSION = "0.2";
+export const RULES_VERSION = "0.3";
 export const PASS_RANGE = 5;
 export const MAX_RESERVE = 2;
 
-export type Role = "GK" | "D" | "M" | "F";
-export interface Stats { pass: number; drib: number; tack: number; shoot: number; ctrl: number; keep: number }
-export interface Player { id: string; team: TeamId; num: number; role: Role; seg: number; reserve: number; st: Stats }
+/** A player: role is his position in the formation (GK, CB, FB, WB, DM, CM, WM, W, ST, TS). */
+export interface Player { id: string; team: TeamId; num: number; role: string; seg: number; reserve: number; st: Stats }
 export interface State {
   rules: string;
   seed: string;
@@ -39,9 +39,11 @@ export interface State {
   ball: { hex: number; owner: string | null };
   players: Player[];
   beaten: string[];      // players who lost a tackle this turn and can't tackle again until next turn
+  moved: Record<string, number>; // spots each player of the side to move has moved this turn (pace cap)
+  formation: Record<TeamId, string>;
   over: boolean;
 }
-export interface Options { seed?: string; ap?: number; turns?: number; firstKick?: TeamId }
+export interface Options { seed?: string; ap?: number; turns?: number; firstKick?: TeamId; formation?: Partial<Record<TeamId, string>> }
 
 export type Command =
   | { t: "move"; p: number; seg?: number; hex?: number }
@@ -76,50 +78,23 @@ export class RuleError extends Error {}
 
 // ---------- setup ----------
 
-const ROLE_STATS: Record<Role, Stats> = {
-  GK: { pass: 2, drib: 1, tack: 2, shoot: 1, ctrl: 3, keep: 4 },
-  D: { pass: 3, drib: 2, tack: 4, shoot: 2, ctrl: 3, keep: 0 },
-  M: { pass: 4, drib: 3, tack: 3, shoot: 3, ctrl: 4, keep: 0 },
-  F: { pass: 3, drib: 4, tack: 2, shoot: 4, ctrl: 3, keep: 0 },
-};
-// role, x fraction of the width, y fraction of the team's own half
-const FORM: readonly [Role, number, number][] = [
-  ["GK", .5, 0],
-  ["D", .08, .24], ["D", .35, .18], ["D", .65, .18], ["D", .92, .24],
-  ["M", .08, .56], ["M", .35, .5], ["M", .65, .5], ["M", .92, .56],
-  ["F", .36, .8], ["F", .64, .8],
-];
-const HALF_Y = cy(CENTER); // 33: the halfway line in integer Y units
-const WIDTH_X = 18;        // columns 0..6
-
-/** Put both teams in kick-off positions; `kick` takes the kick-off. */
+/** Put both teams in kick-off positions from their formations; `kick` takes the kick-off. */
 function lineUp(state: State, kick: TeamId) {
-  const used = new Set<number>([CENTER, ...CENTRE_RING]);
   const players: Player[] = [];
   for (const team of ["K", "S"] as TeamId[]) {
     const face = team === "K" ? 1 : 4; // segment pointing at the opponents' goal
-    FORM.forEach(([role, fx, fy], i) => {
+    FORMATIONS[state.formation[team]].slots.forEach(([role, q0, r0], i) => {
       const num = i + 1;
       let hex: number, seg: number;
-      if (num === 1) { hex = KEEPER_HEX[team]; seg = hex * 6 + face; }
-      else if (team === kick && num === 10) { hex = CENTER; seg = hex * 6 + (team === "K" ? 4 : 1); }
+      if (team === kick && num === 10) { hex = CENTER; seg = hex * 6 + (team === "K" ? 4 : 1); }
       else if (team === kick && num === 11) { hex = team === "K" ? hexAt(2, 5)! : hexAt(2, 6)!; seg = hex * 6 + face; }
-      else {
-        const X = fx * WIDTH_X, Y = team === "K" ? fy * HALF_Y : 2 * HALF_Y - fy * HALF_Y;
-        let best = -1, bd = Infinity;
-        for (const h of HEXES) {
-          if (h.kind !== "field" || h.cut || used.has(h.id)) continue;
-          const dx = cx(h.id) - X, dy = cy(h.id) - Y, d = 3 * dx * dx + dy * dy;
-          if (d < bd) { bd = d; best = h.id; }
-        }
-        hex = best; used.add(best); seg = hex * 6 + face;
-      }
-      const old = state.players.find(p => p.team === team && p.num === num);
-      players.push({ id: team + num, team, num, role, seg, reserve: 0, st: old ? old.st : { ...ROLE_STATS[role] } });
+      else { const [q, r] = mirror(team, q0, r0); hex = hexAt(q, r)!; seg = hex * 6 + face; }
+      players.push({ id: team + num, team, num, role, seg, reserve: 0, st: { ...BUILDS[role] } });
     });
   }
   state.players = players;
   state.beaten = [];
+  state.moved = {};
   state.ball = { hex: CENTER, owner: kick + "10" };
   state.turn = kick;
   state.ap = state.apPerTurn;
@@ -127,11 +102,13 @@ function lineUp(state: State, kick: TeamId) {
 
 export function newState(opts: Options = {}): State {
   const seed = opts.seed ?? "pistachio";
+  const formation: Record<TeamId, string> = { K: opts.formation?.K || DEFAULT_FORMATION, S: opts.formation?.S || DEFAULT_FORMATION };
+  for (const t of ["K", "S"] as TeamId[]) if (!FORMATIONS[formation[t]]) throw new RuleError(`unknown formation ${formation[t]}`);
   const s: State = {
     rules: RULES_VERSION, seed, rng: seedState(seed),
     apPerTurn: opts.ap ?? 7, maxTurns: opts.turns ?? 40,
     turnNo: 1, turn: "K", ap: 0, firstKick: opts.firstKick ?? "K",
-    score: { K: 0, S: 0 }, ball: { hex: CENTER, owner: null }, players: [], beaten: [], over: false,
+    score: { K: 0, S: 0 }, ball: { hex: CENTER, owner: null }, players: [], beaten: [], moved: {}, formation, over: false,
   };
   lineUp(s, s.firstKick);
   return s;
@@ -165,39 +142,59 @@ export function stepCost(s: State, p: Player, h: number): number {
   return 1 + inHex(s, h).filter(x => x.team !== p.team).length + (s.ball.owner === p.id ? CARRY_COST : 0);
 }
 
+/** Spots a player of the side to move may still move this turn: 1 + PAC, minus what he has moved. */
+export function paceLeft(s: State, p: Player): number {
+  return Math.max(0, 1 + p.st.pac - (s.moved[p.id] ?? 0));
+}
+
 /**
- * Segments the player can reach with `ap`: cost and the previous segment on the
- * cheapest path. A path crosses each spot on its lowest free segment; ties go to
- * the lower spot id, so paths are deterministic.
+ * Segments the player can reach with `ap` AP and his remaining pace: the cost of
+ * each, and path(seg), the segments stepped on to get there. A path crosses each
+ * spot on its lowest free segment; ties go to fewer spots, then lower spot ids,
+ * so paths are deterministic.
  */
-export function reach(s: State, p: Player, ap = s.ap): { cost: Map<number, number>; prev: Map<number, number> } {
+export function reach(s: State, p: Player, ap = s.ap): { cost: Map<number, number>; path: (seg: number) => number[] } {
   const occ = occupied(s), carrying = s.ball.owner === p.id, home = hexOf(p);
+  const steps = p.team === s.turn ? paceLeft(s, p) : 1 + p.st.pac;
   const free = (h: number) => hexSegs(h).filter(x => !occ.has(x) && canEnter(p, x));
-  const hexCost = new Map<number, number>([[home, 0]]), from = new Map<number, number>(), entry = new Map<number, number>([[home, p.seg]]);
-  const open = [home];
+  const entry = new Map<number, number>();
+  // search states (spot, spots moved); keep the cheapest per state
+  const key = (h: number, k: number) => h * 16 + k;
+  const best = new Map<number, number>([[key(home, 0), 0]]), from = new Map<number, number>();
+  const open = [key(home, 0)];
   while (open.length) {
-    open.sort((a, b) => hexCost.get(a)! - hexCost.get(b)! || a - b);
-    const h = open.shift()!, c = hexCost.get(h)!;
+    open.sort((a, b) => best.get(a)! - best.get(b)! || (a & 15) - (b & 15) || a - b);
+    const st = open.shift()!, h = st >> 4, k = st & 15, c = best.get(st)!;
+    if (k >= steps) continue;
     for (const n of hexNbrs(h)) {
       if (carrying && HEXES[n].goalOf === p.team) continue;
-      const segs = free(n);
-      if (!segs.length) continue;
+      if (!entry.has(n)) { const f = free(n); if (!f.length) { entry.set(n, -1); continue; } entry.set(n, f[0]); }
+      if (entry.get(n)! < 0) continue;
       const nc = c + 1 + inHex(s, n).filter(x => x.team !== p.team).length + (carrying ? CARRY_COST : 0);
-      if (nc > ap || (hexCost.has(n) && hexCost.get(n)! <= nc)) continue;
-      if (!hexCost.has(n)) open.push(n);
-      hexCost.set(n, nc); from.set(n, h); entry.set(n, segs[0]);
+      const ns = key(n, k + 1);
+      if (nc > ap || (best.has(ns) && best.get(ns)! <= nc)) continue;
+      if (!best.has(ns)) open.push(ns);
+      best.set(ns, nc); from.set(ns, st);
     }
   }
-  const cost = new Map<number, number>(), prev = new Map<number, number>();
-  for (const [h, c] of hexCost) {
-    if (h === home) {
-      if (ap >= 1) for (const x of free(h)) { cost.set(x, 1); prev.set(x, p.seg); }
-      continue;
-    }
-    for (const x of free(h)) { cost.set(x, c); prev.set(x, entry.get(from.get(h)!)!); }
+  // the best state for each spot: cheapest, then fewest spots moved
+  const bestFor = new Map<number, number>();
+  for (const [st, c] of best) {
+    const h = st >> 4, cur = bestFor.get(h);
+    if (cur === undefined || c < best.get(cur)! || (c === best.get(cur)! && (st & 15) < (cur & 15))) bestFor.set(h, st);
   }
-  // the entry segment of an intermediate spot leads back to the previous spot's entry
-  return { cost, prev };
+  const cost = new Map<number, number>(), endState = new Map<number, number>();
+  for (const [h, st] of bestFor) {
+    if (h === home) { if (ap >= 1) for (const x of free(h)) { cost.set(x, 1); endState.set(x, st); } continue; }
+    for (const x of free(h)) { cost.set(x, best.get(st)!); endState.set(x, st); }
+  }
+  const path = (seg: number): number[] => {
+    if (segHex(seg) === home) return [seg];
+    const out = [seg];
+    for (let st = from.get(endState.get(seg)!); st !== undefined && (st >> 4) !== home; st = from.get(st)) out.unshift(entry.get(st >> 4)!);
+    return out;
+  };
+  return { cost, path };
 }
 
 /** Pass and shot targets from the ball's spot. */
@@ -256,22 +253,21 @@ export function apply(state: State, cmd: Command): Applied {
     }
     case "move": {
       const p = me(cmd.p);
-      const { cost, prev } = reach(s, p);
+      const { cost, path: pathTo } = reach(s, p);
       let target = cmd.seg;
       if (target === undefined) {
         if (cmd.hex === undefined) throw new RuleError("move needs a target");
         const opts = hexSegs(cmd.hex).filter(x => cost.has(x)).sort((x, y) => cost.get(x)! - cost.get(y)! || x - y);
-        if (!opts.length) throw new RuleError(`#${p.num} can't reach spot ${hexName(cmd.hex)} with ${s.ap} AP`);
+        if (!opts.length) throw new RuleError(`#${p.num} can't reach spot ${hexName(cmd.hex)} with ${s.ap} AP and pace for ${paceLeft(s, p)} more spot${paceLeft(s, p) === 1 ? "" : "s"}`);
         target = opts[0];
         cmd.seg = target; // resolved, so the notation records the exact segment
       }
-      if (!cost.has(target)) throw new RuleError(`#${p.num} can't reach ${segName(target)} with ${s.ap} AP`);
-      const path: number[] = [];
-      for (let x = target; x !== p.seg; x = prev.get(x)!) path.unshift(x);
-      for (const step of path) {
+      if (!cost.has(target)) throw new RuleError(`#${p.num} can't reach ${segName(target)} with ${s.ap} AP and pace for ${paceLeft(s, p)} more spot${paceLeft(s, p) === 1 ? "" : "s"}`);
+      for (const step of pathTo(target)) {
         const fromHex = hexOf(p), h = segHex(step), c = stepCost(s, p, h);
         if (s.ap < c) break;
         p.seg = step; s.ap -= c;
+        if (h !== fromHex) s.moved[p.id] = (s.moved[p.id] ?? 0) + 1;
         if (s.ball.owner === p.id && h !== fromHex) {
           s.ball.hex = h;
           if (!dribbleContests(s, p, dice, ev)) break;
@@ -341,6 +337,7 @@ function nextTurn(s: State, ev: Ev[]) {
   s.turn = other(s.turn);
   s.ap = s.apPerTurn;
   s.beaten = [];
+  s.moved = {};
   for (const p of s.players) if (p.team === s.turn) p.reserve = 0; // reserves expire as your own turn begins
 }
 
@@ -362,9 +359,11 @@ const majority = (s: State, h: number, team: TeamId) => {
 function duel(s: State, kind: "dribble" | "press" | "tackle" | "receive", att: Player, def: Player, dice: Dice, ev: Ev[]): "win" | "tie" | "lose" {
   const h = hexOf(att.id === s.ball.owner ? att : def);
   let a: number, d: number;
-  if (kind === "tackle") { a = att.st.tack + dice.roll() + majority(s, h, att.team); d = def.st.drib + dice.roll(); }
-  else if (kind === "receive") { a = att.st.ctrl + dice.roll(); d = def.st.tack + dice.roll() + majority(s, h, def.team); }
-  else { a = att.st.drib + dice.roll(); d = def.st.tack + dice.roll() + majority(s, h, def.team) + (kind === "press" ? 1 : 0); }
+  // PHY: +1 to whichever of the two is physically stronger
+  const ea = att.st.phy > def.st.phy ? 1 : 0, ed = def.st.phy > att.st.phy ? 1 : 0;
+  if (kind === "tackle") { a = att.st.def + dice.roll() + majority(s, h, att.team) + ea; d = def.st.dri + dice.roll() + ed; }
+  else if (kind === "receive") { a = att.st.dri + dice.roll() + ea; d = def.st.def + dice.roll() + majority(s, h, def.team) + ed; }
+  else { a = att.st.dri + dice.roll() + ea; d = def.st.def + dice.roll() + majority(s, h, def.team) + (kind === "press" ? 1 : 0) + ed; }
   const out = a > d ? "win" : a === d ? "tie" : "lose";
   ev.push({ e: "duel", kind, att: att.id, def: def.id, a, d, out });
   if (kind === "tackle") {
@@ -429,12 +428,12 @@ function looseReactions(s: State, dice: Dice, ev: Ev[]) {
 /** A pass or a shot from the ball's spot to hex `to`. */
 function kick(s: State, p: Player, to: number, shot: boolean, toNum: number | undefined, dice: Dice, ev: Ev[]) {
   const from = s.ball.hex, dist = hexDist(from, to);
-  const skill = shot ? p.st.shoot : p.st.pass;
+  const skill = shot ? p.st.sho : p.st.pas;
   // Opponents in the lane, nearest first. Reserves just off the lane stretch for it, a little worse.
   for (const { p: x, react } of laneThreats(s, p.team, from, to)) {
     if (react) { x.reserve--; }
     const a = skill + dice.roll() + 1 - (dist >= 4 ? 1 : 0);
-    const d = x.st.tack + dice.roll() - (react ? 1 : 0) + (x.role === "GK" && shot ? x.st.keep - x.st.tack : 0);
+    const d = x.st.def + dice.roll() - (react ? 1 : 0) + (x.role === "GK" && shot ? x.st.kee - x.st.def : 0);
     if (d > a) {
       s.ball.hex = hexOf(x); s.ball.owner = x.id;
       ev.push({ e: "intercept", pid: x.id, a, d, react });
@@ -447,8 +446,8 @@ function kick(s: State, p: Player, to: number, shot: boolean, toNum: number | un
     const gk = s.players.find(x => x.team !== p.team && x.role === "GK");
     const gd = gk ? hexDist(hexOf(gk), to) : 99;
     if (gk && gd <= 1) {
-      const a = p.st.shoot + dice.roll() - Math.max(0, dist - 2);
-      const d = gk.st.keep + dice.roll() + (gd === 0 ? 1 : 0);
+      const a = p.st.sho + dice.roll() - Math.max(0, dist - 2);
+      const d = gk.st.kee + dice.roll() + (gd === 0 ? 1 : 0);
       if (d > a) { s.ball.hex = hexOf(gk); s.ball.owner = gk.id; ev.push({ e: "saved", pid: gk.id, a, d }); return; }
       if (d === a) {
         const out = hexNbrs(to).filter(n => HEXES[n].kind === "field").sort((x, y) => x - y);

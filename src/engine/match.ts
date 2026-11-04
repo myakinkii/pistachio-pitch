@@ -21,6 +21,7 @@ export class Match {
     this.headers = {
       Game: "Pistachio Pitch", Rules: RULES_VERSION, Seed: this.start.seed,
       AP: String(this.start.apPerTurn), Turns: String(this.start.maxTurns), FirstKick: this.start.firstKick,
+      FormationK: this.start.formation.K, FormationS: this.start.formation.S,
       Kernels: "Kernels", Shells: "Shells", ...(opts.headers ?? {}),
     };
   }
@@ -67,6 +68,7 @@ export class Match {
     const m = new Match({
       seed: h.Seed ?? "pistachio", ap: h.AP ? +h.AP : undefined, turns: h.Turns ? +h.Turns : undefined,
       firstKick: h.FirstKick === "S" ? "S" : "K", headers: h,
+      formation: { K: h.FormationK, S: h.FormationS },
     });
     for (const t of f.turns) {
       for (const e of t.entries) {

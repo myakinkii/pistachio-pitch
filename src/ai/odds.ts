@@ -27,12 +27,12 @@ export const ownGoalDist = (team: TeamId, h: number) => Math.min(...GOAL[team].m
 
 /** Chance a ball from `from` to `to` gets past every opponent in (or near) the lane. */
 export function laneSafety(s: State, p: Player, from: number, to: number, shot: boolean): { safe: number; threats: string[] } {
-  const dist = hexDist(from, to), skill = shot ? p.st.shoot : p.st.pass;
+  const dist = hexDist(from, to), skill = shot ? p.st.sho : p.st.pas;
   let safe = 1;
   const threats: string[] = [];
   for (const { p: x, react } of laneThreats(s, p.team, from, to)) {
     const a = skill + 1 - (dist >= 4 ? 1 : 0);
-    const d = x.st.tack - (react ? 1 : 0) + (x.role === "GK" && shot ? x.st.keep - x.st.tack : 0);
+    const d = x.st.def - (react ? 1 : 0) + (x.role === "GK" && shot ? x.st.kee - x.st.def : 0);
     const cut = 1 - duelOdds(a, d).win - duelOdds(a, d).tie; // defender strictly higher
     safe *= 1 - cut;
     threats.push(`${x.id}${react ? "(reserve)" : ""} ${pct(cut)}`);
@@ -41,6 +41,8 @@ export function laneSafety(s: State, p: Player, from: number, to: number, shot: 
 }
 
 export const pct = (x: number) => `${Math.round(x * 100)}%`;
+/** The PHY edge in duels: +1 for the physically stronger of the two. */
+const edge = (a: Player, b: Player) => (a.st.phy > b.st.phy ? 1 : 0);
 
 export interface Option { kind: string; cmd: string; text: string; score: number }
 
@@ -63,7 +65,7 @@ export function analyze(s: State): { summary: string; options: Option[] } {
       const gd = hexDist(hexOf(keeper), g), dist = hexDist(bh, g);
       let goal = 1, save = "keeper can't reach it";
       if (gd <= 1) {
-        const o = duelOdds(c.st.shoot - Math.max(0, dist - 2), keeper.st.keep + (gd === 0 ? 1 : 0));
+        const o = duelOdds(c.st.sho - Math.max(0, dist - 2), keeper.st.kee + (gd === 0 ? 1 : 0));
         goal = o.win; save = `keeper ${gd === 0 ? "on that spot" : "next to it"}`;
       }
       const p = lane.safe * goal;
@@ -75,7 +77,7 @@ export function analyze(s: State): { summary: string; options: Option[] } {
       const h = hexOf(m), lane = laneSafety(s, c, bh, h, false);
       const opp = inHex(s, h).filter(x => x.team !== team);
       let keep = lane.safe;
-      if (opp.length) keep *= duelOdds(m.st.ctrl, opp[0].st.tack + majority(s, h, opp[0].team)).win;
+      if (opp.length) keep *= duelOdds(m.st.dri + edge(m, opp[0]), opp[0].st.def + majority(s, h, opp[0].team) + edge(opp[0], m)).win;
       const g1 = goalDist(team, h);
       opts.push({ kind: "pass", cmd: `#${c.num}>#${m.num}`, score: keep * (g0 - g1 + 1),
         text: `pass #${c.num}>#${m.num} (to spot ${hexName(h)}, ${g1} from goal, ${g0 - g1 >= 0 ? "+" : ""}${g0 - g1}): arrives ${pct(keep)}${lane.threats.length ? `; lane: ${lane.threats.join(", ")}` : ""}${opp.length ? `; marked by ${opp.map(x => x.id).join(" ")}` : ""}` });
@@ -97,21 +99,20 @@ export function analyze(s: State): { summary: string; options: Option[] } {
         text: `through ball #${c.num}>${hexName(h)} (${goalDist(team, h)} from goal), then #${best.p.num}-${hexName(h)} for ${best.k} AP: lane ${pct(lane.safe)}${pounce.length ? `; DANGER reserves ${pounce.join(" ")} will pounce on it` : ""}` });
     }
     // Dribbles: spots closer to goal, with the chance of getting through every duel on the way
-    const { cost, prev } = reach(s, c, Math.max(1, s.ap - 1));
+    const { cost, path: pathTo } = reach(s, c, Math.max(1, s.ap - 1));
     const bestBySpot = new Map<number, { seg: number; k: number; p: number }>();
     for (const [seg, k] of cost) {
       const h = segHex(seg);
       if (goalDist(team, h) >= g0) continue;
       let p = 1, last = bh;
-      const path: number[] = [];
-      for (let x = seg; x !== c.seg; x = prev.get(x)!) path.unshift(x);
+      const path = pathTo(seg);
       for (const step of path) {
         const sh = segHex(step);
         if (sh === last) continue;
         last = sh;
-        for (const d of inHex(s, sh).filter(x => x.team !== team)) p *= duelOdds(c.st.drib, d.st.tack + majority(s, sh, d.team, [c])).win;
+        for (const d of inHex(s, sh).filter(x => x.team !== team)) p *= duelOdds(c.st.dri + edge(c, d), d.st.def + majority(s, sh, d.team, [c]) + edge(d, c)).win;
         const press = s.players.filter(x => x.team !== team && x.reserve > 0 && hexDist(hexOf(x), sh) === 1).length;
-        for (let i = 0; i < press; i++) p *= duelOdds(c.st.drib, 3 + 1).win; // a press: a typical tackle 3, +1
+        for (let i = 0; i < press; i++) p *= duelOdds(c.st.dri, 3 + 1).win; // a press: a typical defender 3, +1
       }
       const cur = bestBySpot.get(h);
       if (!cur || p > cur.p || (p === cur.p && k < cur.k)) bestBySpot.set(h, { seg, k, p });
@@ -151,7 +152,7 @@ export function analyze(s: State): { summary: string; options: Option[] } {
       const r = reachTo(m, s.ap - 1);
       if (!r) continue;
       const inIt = r.k === 0;
-      const o = duelOdds(m.st.tack + majority(s, bh, team, inIt ? [] : [m]), c.st.drib);
+      const o = duelOdds(m.st.def + majority(s, bh, team, inIt ? [] : [m]) + edge(m, c), c.st.dri + edge(c, m));
       opts.push({ kind: "press", cmd: inIt ? `#${m.num}x#${c.num}` : `#${m.num}-${segName(r.seg)} then #${m.num}x#${c.num}`,
         score: (o.win + o.tie * 0.5) * 6 + 0.5 - r.k * 0.35,
         text: `${inIt ? "tackle" : "close down and tackle"} ${inIt ? `#${m.num}x#${c.num}` : `#${m.num}-${segName(r.seg)} (${r.k} AP) then #${m.num}x#${c.num}`}: wins it ${pct(o.win)}, knocks it loose ${pct(o.tie)}` });
@@ -162,14 +163,14 @@ export function analyze(s: State): { summary: string; options: Option[] } {
     const pairs: { a: Player; b: Player; cmds: string[]; k: number }[] = [];
     for (const t of inSpot) for (const h of helpers) pairs.push({ a: t, b: h.m, cmds: [`#${h.m.num}-${segName(h.r.seg)}`, `#${t.num}x#${c.num}`], k: h.r.k });
     for (const h1 of helpers) for (const h2 of helpers) {
-      if (h1.m === h2.m || h1.r.seg === h2.r.seg || h1.r.k + h2.r.k + 1 > s.ap || h1.m.st.tack < h2.m.st.tack) continue;
+      if (h1.m === h2.m || h1.r.seg === h2.r.seg || h1.r.k + h2.r.k + 1 > s.ap || h1.m.st.def < h2.m.st.def) continue;
       pairs.push({ a: h1.m, b: h2.m, cmds: [`#${h2.m.num}-${segName(h2.r.seg)}`, `#${h1.m.num}-${segName(h1.r.seg)}`, `#${h1.m.num}x#${c.num}`], k: h1.r.k + h2.r.k });
     }
     for (const pr of pairs) {
       const extra = [pr.a, pr.b].filter(x => hexOf(x) !== bh);
       const maj = majority(s, bh, team, extra);
       if (!maj) continue;
-      const o = duelOdds(pr.a.st.tack + 1, c.st.drib);
+      const o = duelOdds(pr.a.st.def + 1 + edge(pr.a, c), c.st.dri + edge(c, pr.a));
       opts.push({ kind: "double", cmd: pr.cmds.join(" then "), score: (o.win + o.tie * 0.5) * 6 - pr.k * 0.4,
         text: `double up: ${pr.cmds.join(", ")} (${pr.k + 1} AP): with the majority, wins it ${pct(o.win)}, knocks it loose ${pct(o.tie)}` });
     }

@@ -5,7 +5,8 @@
 import {
   Match, HEXES, NSEG, segExists, segIsGoal, segZone, segHex, pixelOf, LETTERS, PENALTY_SPOT,
   reach, passTargets, laneThreats, carrier, hexOf, inHex, playerOf, attackGoal, hexDist, segName, hexName,
-  RuleError, NotationError, formatCommand as fmt, control, type State, type Player, type TeamId, type Zone, type Entry,
+  RuleError, NotationError, formatCommand as fmt, control, paceLeft,
+  FORMATIONS, FORMATION_NAMES, BUILDS, POSITION_NAMES, type State, type Player, type TeamId, type Zone, type Entry,
 } from "../src/engine/index.ts";
 import { botCommand } from "../src/ai/bot.ts";
 import { analyze } from "../src/ai/odds.ts";
@@ -328,6 +329,14 @@ function renderBoard() {
   ballEl.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
 }
 
+const STAT_LABEL: [keyof Player["st"], string][] = [["pac", "PAC"], ["sho", "SHO"], ["pas", "PAS"], ["dri", "DRI"], ["def", "DEF"], ["phy", "PHY"], ["kee", "KEE"]];
+/** A one-line player card: who he is, his stats, and how far he can still move. */
+function cardText(s: State, p: Player): string {
+  const stats = STAT_LABEL.filter(([k]) => k !== "kee" || p.role === "GK").map(([k, l]) => `${l} ${p.st[k]}`).join(" · ");
+  const pace = p.team === s.turn ? ` Pace left: ${paceLeft(s, p)} spot${paceLeft(s, p) === 1 ? "" : "s"}.` : "";
+  return `${name(p)}, ${POSITION_NAMES[p.role] ?? p.role}: ${stats}.${pace}`;
+}
+
 function hintText(): string {
   const s = shown();
   if (view !== null) return "Replay. Step through the match, or play on from here.";
@@ -346,7 +355,7 @@ function hintText(): string {
     else if (!inHex(s, h).some(x => x.team === sel.team)) parts.push("Nobody there: a through ball.");
     return parts.join(" ");
   }
-  const parts = ["Numbers on segments are action costs."];
+  const parts = [cardText(s, sel), "Numbers on segments are action costs."];
   if (c === sel) parts.push(lastPtr === "touch" ? "Step into another hexagon to dribble. Tap a ring once to preview a pass, again to play it." : "Step into another hexagon to dribble. Hover a ring to preview a pass or shot, click to play it.");
   if (c && c.team !== sel.team && hexOf(sel) === s.ball.hex) parts.push(s.beaten.includes(sel.id) ? `#${sel.num} lost a tackle this turn.` : "Tap the ball to tackle.");
   if (sel.reserve) parts.push(`#${sel.num} holds ${sel.reserve} reserve${sel.reserve > 1 ? "s" : ""}.`);
@@ -356,6 +365,7 @@ function hintText(): string {
 function renderPanel() {
   const s = shown();
   $("sK").textContent = String(s.score.K); $("sS").textContent = String(s.score.S);
+  $("fK").textContent = s.formation.K; $("fS").textContent = s.formation.S;
 
   $("turnText").innerHTML = s.over ? "Full time" : `<span class="chip" style="background:${TEAM[s.turn].chip}"></span>${TEAM[s.turn].name} to play`;
   $("turnNo").textContent = `Turn ${Math.min(s.turnNo, s.maxTurns)} of ${s.maxTurns}`;
@@ -429,6 +439,8 @@ svg.addEventListener("pointerover", e => {
   const pass = (e.target as Element).closest('[data-act="pass"]') as HTMLElement | null;
   const n = pass ? Number(pass.dataset.hex) : null;
   if (n !== ui.preview) { ui.preview = n; render(); }
+  const pc = (e.target as Element).closest('[data-act="piece"]') as HTMLElement | null;
+  if (pc && !ui.preview) { const pl = shown().players.find(x => x.id === pc.dataset.id); if (pl) { $("hint").textContent = cardText(shown(), pl); return; } }
   const mv = (e.target as Element).closest('[data-act="move"]') as HTMLElement | null;
   if (mv) { const c = Number(mv.dataset.cost); $("hint").textContent = `Move to ${segName(Number(mv.dataset.seg))} for ${c} action${c > 1 ? "s" : ""}.`; }
 });
@@ -504,7 +516,10 @@ $("newBox").addEventListener("toggle", () => { if (($("newBox") as HTMLDetailsEl
 $("startBtn").addEventListener("click", () => {
   aiBusy?.abort();
   const seed = ($("seedIn") as HTMLInputElement).value.trim() || randomSeed();
-  match = new Match({ seed, ap: Number(($("apSel") as HTMLSelectElement).value), turns: Number(($("turnsSel") as HTMLSelectElement).value) });
+  match = new Match({
+    seed, ap: Number(($("apSel") as HTMLSelectElement).value), turns: Number(($("turnsSel") as HTMLSelectElement).value),
+    formation: { K: ($("formK") as HTMLSelectElement).value, S: ($("formS") as HTMLSelectElement).value },
+  });
   view = null; comms = []; ui.sel = null; ui.preview = null; ui.error = ""; setAiNote("");
   seedIn.value = randomSeed(); ($("newBox") as HTMLDetailsElement).open = false;
   save(); render(); schedule();
@@ -572,6 +587,31 @@ $("saveBtn").addEventListener("click", async () => {
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 });
+
+// ---------- formations and squads (New match panel) ----------
+const formSel = { K: $("formK") as HTMLSelectElement, S: $("formS") as HTMLSelectElement };
+for (const t of ["K", "S"] as TeamId[]) {
+  formSel[t].innerHTML = FORMATION_NAMES.map(n => `<option value="${n}">${n} (${FORMATIONS[n].style})</option>`).join("");
+  formSel[t].value = match.start.formation[t];
+  formSel[t].addEventListener("change", renderSquads);
+}
+function renderSquads() {
+  $("squads").innerHTML = (["K", "S"] as TeamId[]).map(t => {
+    const f = FORMATIONS[formSel[t].value];
+    const rows = f.slots.map(([pos], i) => {
+      const b = BUILDS[pos];
+      const cells = STAT_LABEL.map(([k]) => {
+        const v = b[k];
+        if (k === "kee" && pos !== "GK") return `<td class="lo">–</td>`;
+        return `<td class="${v >= 5 ? "hi" : v <= 1 ? "lo" : ""}">${v}</td>`;
+      }).join("");
+      return `<tr><td>${i + 1}</td><td class="pos">${pos}</td>${cells}</tr>`;
+    }).join("");
+    return `<table class="squad"><caption>${TEAM[t].name}: ${formSel[t].value}, ${f.style}</caption>
+      <thead><tr><th>#</th><th class="pos"></th>${STAT_LABEL.map(([, l]) => `<th>${l}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table>`;
+  }).join("");
+}
+renderSquads();
 
 // ---------- start ----------
 restore();

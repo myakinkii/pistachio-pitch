@@ -1,6 +1,6 @@
-# Rules (version 0.2)
+# Rules (version 0.3)
 
-The rules version is written into every match file (`[Rules "0.2"]`). Change it
+The rules version is written into every match file (`[Rules "0.3"]`). Change it
 whenever a change makes old matches play out differently, so old files are
 refused instead of silently replaying wrong.
 
@@ -43,34 +43,63 @@ faster than legs: a pass covers up to 5 spots for 1 AP, a dribbler 1 spot for 2.
 
 ## Contests
 
-All rolls are d6 + a stat (1 to 5); higher wins. Stats by role for now:
+All rolls are d6 + a stat (1 to 5); higher wins.
 
-| | pass | dribble | tackle | shoot | control | keep |
-|---|---|---|---|---|---|---|
-| GK | 2 | 1 | 2 | 1 | 3 | 4 |
-| D | 3 | 2 | 4 | 2 | 3 | |
-| M | 4 | 3 | 3 | 3 | 4 | |
-| F | 3 | 4 | 2 | 4 | 3 | |
+## Players and formations
+
+Every player has six stats from 1 to 5 that add up to **18**; keepers also have
+KEE inside the same 18. Every build is a trade-off.
+
+| Stat | |
+|---|---|
+| PAC | pace: a player moves at most **1 + PAC spots per turn** (changing segment within a spot doesn't count) |
+| SHO | shooting |
+| PAS | passing: beating interceptions |
+| DRI | dribbling, and receiving under pressure |
+| DEF | tackling, intercepting, pressing |
+| PHY | physical: **+1 in a duel** (dribble, press, tackle, reception) against a weaker opponent |
+| KEE | keeping: saves |
+
+Builds by position (`src/engine/squad.ts`):
+
+| | PAC | SHO | PAS | DRI | DEF | PHY | KEE |
+|---|---|---|---|---|---|---|---|
+| GK keeper | 2 | 1 | 3 | 1 | 2 | 4 | 5 |
+| CB centre-back | 2 | 1 | 3 | 2 | 5 | 5 | |
+| FB full-back | 4 | 1 | 3 | 3 | 4 | 3 | |
+| WB wing-back | 5 | 1 | 3 | 3 | 3 | 3 | |
+| DM holding midfielder | 2 | 1 | 4 | 2 | 5 | 4 | |
+| CM central midfielder | 3 | 2 | 5 | 3 | 3 | 2 | |
+| WM wide midfielder | 4 | 2 | 4 | 4 | 2 | 2 | |
+| W winger | 5 | 3 | 3 | 5 | 1 | 1 | |
+| ST striker | 4 | 5 | 2 | 4 | 1 | 2 | |
+| TS target striker | 2 | 5 | 3 | 3 | 1 | 4 | |
+
+Each side picks a formation before the match: **4-4-2** (balanced), **4-3-3**
+(attacking), **5-4-1** (defensive) or **3-5-2** (midfield control). A formation is
+a fixed set of kick-off positions, mirrored for the Shells, with a build for each
+position. #10 takes the kick-off and #11 joins him in the centre circle. The match
+file records both (`[FormationK "4-3-3"]`).
 
 *Majority*: +1 to the side holding more of the six segments of the spot where
 the contest happens.
 
 - **Dribble**: the carrier stepping into a spot with opponents duels each of
-  them in turn: dribble + d6 against tackle + d6 + majority. Win: carry on. Tie:
+  them in turn: DRI + d6 against DEF + d6 + majority. Win: carry on. Tie:
   he stops there with the ball. Lose: dispossessed.
-- **Tackle** (`x`): tackler in the ball's spot: tackle + d6 + majority against
-  dribble + d6. Win: takes the ball. Tie: the ball is loose in that spot. Lose:
+- **Tackle** (`x`): tackler in the ball's spot: DEF + d6 + majority against
+  DRI + d6. Win: takes the ball. Tie: the ball is loose in that spot. Lose:
   that player can't tackle again this turn.
 - **Pass and shot**: every opponent in the lane (standing close to the line from
   the ball's spot to the target, past the first twentieth of it), nearest first:
-  tackle + d6 (keepers use keep against shots) against pass (or shoot) + d6 + 1,
+  DEF + d6 (keepers use KEE against shots) against PAS (or SHO) + d6 + 1,
   -1 for 4 spots or more. Higher defender cuts it out.
   Then, for a pass: teammates only on the target receive it; teammates and
-  opponents mean a reception duel (control + d6 against tackle + d6 + majority:
+  opponents mean a reception duel (DRI + d6 against DEF + d6 + majority:
   win keeps it, tie leaves it loose, lose loses it); opponents only win it; an
   empty target leaves the ball loose. Range: 5 spots.
 - **Shot at a goal spot**: if the keeper is on that spot or next to it:
-  keep + d6 (+1 on that spot) against shoot + d6 - 1 per spot past 2.
+  KEE + d6 (+1 on that spot) against SHO + d6 - 1 per spot past 2.
   Keeper higher: saved and held. Tie: parried loose to a random spot next to the
   goal. Shooter higher (or keeper too far): goal.
 - Walking onto a loose ball picks it up.
@@ -96,6 +125,9 @@ substitutions; live reactions (quick-time decisions).
 
 ## Changes
 
+- **0.3**: player stats (PAC SHO PAS DRI DEF PHY, plus KEE for keepers; 18
+  points each), formations (4-4-2, 4-3-3, 5-4-1, 3-5-2) with builds by position,
+  the pace cap (1 + PAC spots per turn) and the PHY edge in duels.
 - **0.2**: movement by spot instead of by segment (1 AP per spot, +1 per
   opponent in it, +1 carrying the ball; 1 AP to change segment in your own spot).
   Shots got harder: -1 per spot past 2 (was 3), and the keeper no longer takes
