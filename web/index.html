@@ -4,118 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Calcio Pistacchio</title>
-<style>/*STYLE*/</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Permanent+Marker&display=swap" rel="stylesheet">
 </head>
 <body>
-<main class="app">
-  <section class="board-wrap" aria-label="Pitch">
-    <div id="hud" class="hud" aria-label="Match status"></div>
-    <svg id="pitch" role="application" aria-label="Hex football pitch with pistachio players"></svg>
-  </section>
-
-  <aside class="panel">
-    <div class="score" id="scoreBox" aria-label="Score">
-      <h1 class="title">Calcio Pistacchio</h1>
-      <div class="team K"><svg viewBox="-12 -16 24 32" aria-hidden="true"><clipPath id="miniK"><ellipse rx="10.5" ry="14.5"/></clipPath><g clip-path="url(#miniK)"><rect x="-11" y="-15" width="22" height="30" fill="#9fcb3a"/><rect x="-11" y="-3.5" width="22" height="7" fill="#9c2e6b"/></g><ellipse rx="10.5" ry="14.5" fill="none" stroke="#2a1f22" stroke-width="1.4"/></svg><span><span id="nameK">Kernels</span><span class="form" id="fK"></span></span></div>
-      <div class="nums"><span id="sK">0</span><span>:</span><span id="sS">0</span></div>
-      <div class="team S"><span><span id="nameS">Shells</span><span class="form" id="fS"></span></span><svg viewBox="-12 -16 24 32" aria-hidden="true"><clipPath id="miniS"><ellipse rx="11" ry="15"/></clipPath><g clip-path="url(#miniS)"><rect x="-11" y="-15" width="22" height="30" fill="#ecdfbf"/><rect x="-3" y="-15" width="6" height="30" fill="#6b4426"/></g><ellipse rx="11" ry="15" fill="none" stroke="#4a3018" stroke-width="1.4"/></svg></div>
-      <select id="sideK" class="side K" aria-label="Who plays the Kernels"><option value="human">You</option><option value="bot">Bot</option><option value="advisor">Advisor</option><option value="claude">Claude</option></select>
-      <span class="vs" aria-hidden="true">–</span>
-      <select id="sideS" class="side S" aria-label="Who plays the Shells"><option value="human">You</option><option value="bot" selected>Bot</option><option value="advisor">Advisor</option><option value="claude">Claude</option></select>
-      <label class="ctl auto" title="Claude sides make one request per turn on your Claude account; any problem switches auto-play off"><input type="checkbox" id="autoAi"> Auto-play AI sides</label>
-    </div>
-
-    <div class="turn" id="turnBox">
-      <div class="turn-row"><span id="turnText"></span><span id="turnNo"></span></div>
-      <div class="ap-row"><span class="ap-label">Actions left</span><div class="pips" id="pips"></div></div>
-      <div id="replayBar" class="replay" hidden>
-        <span class="replay-text"></span>
-        <div class="row">
-          <button data-r="first" type="button" aria-label="First action">⏮</button>
-          <button data-r="prev" type="button" aria-label="Previous action">◀</button>
-          <button data-r="next" type="button" aria-label="Next action">▶</button>
-          <button data-r="last" type="button" aria-label="Last action">⏭</button>
-          <button data-r="resume" type="button">Play on from here</button>
-        </div>
-      </div>
-      <p id="hint" class="hint" aria-live="polite"></p>
-      <div class="row">
-        <button id="undo" type="button" class="quiet">Undo</button>
-        <button id="reserveBtn" type="button" disabled>Reserve (+1 AP on player)</button>
-        <button id="endTurn" type="button" class="strong">End turn</button>
-      </div>
-      <div id="aiBox" class="ai" hidden>
-        <button id="aiBtn" type="button" class="strong"></button>
-        <button id="aiStop" type="button" hidden>Stop</button>
-        <p id="aiNote" class="note"></p>
-      </div>
-    </div>
-
-    <details id="displayBox">
-      <summary>Display</summary>
-      <div class="settings">
-        <label class="ctl" title="Shortcut: C"><input type="checkbox" id="coordToggle" checked> Show coordinates</label>
-        <label class="ctl" title="Shortcut: R"><input type="checkbox" id="rotate"> Turn the pitch sideways (1a bottom left)</label>
-        <label class="ctl" title="Shortcut: V"><input type="checkbox" id="ctrlToggle" checked> Show control (magenta Kernels, coffee Shells)</label>
-        <label class="ctl slider">Pitch colours <input id="tint" type="range" min="10" max="100" step="5" value="100" aria-label="Pitch colour strength"></label>
-      </div>
-    </details>
-
-    <details id="newBox">
-      <summary>New match</summary>
-      <div class="settings">
-        <div class="forms">
-          <label class="ctl">Kernels <select id="formK" aria-label="Kernels formation"></select></label>
-          <label class="ctl">Shells <select id="formS" aria-label="Shells formation"></select></label>
-        </div>
-        <div id="squads" class="squads"></div>
-        <label class="ctl">Seed <input id="seedIn" type="text" spellcheck="false"></label>
-        <label class="ctl">Actions per turn
-          <select id="apSel"><option>5</option><option>6</option><option selected>7</option><option>8</option><option>9</option><option>10</option></select>
-        </label>
-        <label class="ctl">Turns
-          <select id="turnsSel"><option value="10">10</option><option value="20">20</option><option value="40" selected>40</option><option value="60">60</option></select>
-        </label>
-        <button id="startBtn" type="button" class="strong">Start new match</button>
-      </div>
-    </details>
-
-    <details>
-      <summary>Notation, save and load</summary>
-      <p class="small">The match as Pistachio Pitch Notation. The same file replays in the command line: <code>node src/cli.ts replay match.ppn --verify</code></p>
-      <textarea id="ppn" spellcheck="false" rows="8"></textarea>
-      <div class="row">
-        <button id="saveBtn" type="button">Save file</button>
-        <button id="copyBtn" type="button">Copy</button>
-        <button id="loadBtn" type="button">Load from text</button>
-        <label class="file">Open file<input id="fileIn" type="file" accept=".ppn,.txt,text/plain"></label>
-      </div>
-      <p id="ioNote" class="small" aria-live="polite"></p>
-      <p class="log-head">Replay</p>
-      <p class="small replay-text">Step through the match so far, or a loaded file.</p>
-      <div class="row">
-        <button data-r="first" type="button" aria-label="First action">⏮</button>
-        <button data-r="prev" type="button" aria-label="Previous action">◀</button>
-        <button data-r="next" type="button" aria-label="Next action">▶</button>
-        <button data-r="last" type="button" aria-label="Last action">⏭</button>
-        <button data-r="resume" type="button" class="resume-btn">Play on from here</button>
-      </div>
-    </details>
-
-
-    <details>
-      <summary>How it plays</summary>
-      <p>Each hexagon is a ball spot with six segments where players stand. Your side spends a pool of actions each turn: moving costs one per hexagon, plus one for each opponent in it and one more with the ball; changing segment within your hexagon, passes, shots, tackles and reserves cost one each.</p>
-      <p>Select a pistachio to see where it can go (the numbers are costs). With the ball, step into another hexagon to dribble, or use a ring to pass or shoot. Opponents in a hexagon you dribble into duel you; opponents in a passing lane may cut it out. Dice and player stats decide.</p>
-      <p>To tackle, stand in the ball’s hexagon and tap the ball. A player who loses a tackle can’t tackle again that turn.</p>
-      <p>Reserves are actions you leave on a player for the opponent’s turn: they press dribblers next to them, stretch for nearby passes and grab loose balls. Losing the ball ends your turn.</p>
-    </details>
-    <section class="comms">
-      <p class="log-head">Commentary</p>
-      <ol id="comms" class="log"></ol>
-    </section>
-  </aside>
-</main>
-<script>/*SCRIPT*/</script>
+<div id="app"></div>
+<script type="module" src="/src/main.ts"></script>
 </body>
 </html>

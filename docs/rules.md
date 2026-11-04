@@ -60,7 +60,7 @@ KEE inside the same 18. Every build is a trade-off.
 | PHY | physical: **+1 in a duel** (dribble, press, tackle, reception) against a weaker opponent |
 | KEE | keeping: saves |
 
-Builds by position (`src/engine/squad.ts`):
+Builds by position (`data/builds.json`):
 
 | | PAC | SHO | PAS | DRI | DEF | PHY | KEE |
 |---|---|---|---|---|---|---|---|
@@ -78,7 +78,7 @@ Builds by position (`src/engine/squad.ts`):
 Each side picks a formation before the match: **4-4-2** (balanced), **4-3-3**
 (attacking), **5-4-1** (defensive) or **3-5-2** (midfield control). A formation is
 a fixed set of kick-off positions, mirrored for the Shells, with a build for each
-position. #10 takes the kick-off and #11 joins him in the centre circle. The match
+position, plus a target shape it aims for in mid-game (`data/formations.json`). #10 takes the kick-off and #11 joins him in the centre circle. The match
 file records both (`[FormationK "4-3-3"]`).
 
 *Majority*: +1 to the side holding more of the six segments of the spot where

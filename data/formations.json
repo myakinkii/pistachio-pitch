@@ -1,0 +1,66 @@
+{
+  "4-4-2": {
+    "style": "balanced",
+    "players": [
+      { "pos": "GK", "kickoff": 5, "target": 5 },
+      { "pos": "FB", "kickoff": 29, "target": 29 },
+      { "pos": "CB", "kickoff": 31, "target": 31 },
+      { "pos": "CB", "kickoff": 33, "target": 33 },
+      { "pos": "FB", "kickoff": 35, "target": 35 },
+      { "pos": "WM", "kickoff": 38, "target": 48 },
+      { "pos": "CM", "kickoff": 40, "target": 67 },
+      { "pos": "CM", "kickoff": 42, "target": 69 },
+      { "pos": "WM", "kickoff": 44, "target": 52 },
+      { "pos": "ST", "kickoff": 49, "target": 85 },
+      { "pos": "ST", "kickoff": 51, "target": 87 }
+    ]
+  },
+  "4-3-3": {
+    "style": "attacking",
+    "players": [
+      { "pos": "GK", "kickoff": 5, "target": 5 },
+      { "pos": "FB", "kickoff": 29, "target": 47 },
+      { "pos": "CB", "kickoff": 31, "target": 31 },
+      { "pos": "CB", "kickoff": 33, "target": 33 },
+      { "pos": "FB", "kickoff": 35, "target": 53 },
+      { "pos": "DM", "kickoff": 32, "target": 41 },
+      { "pos": "CM", "kickoff": 39, "target": 57 },
+      { "pos": "CM", "kickoff": 43, "target": 61 },
+      { "pos": "W", "kickoff": 47, "target": 83 },
+      { "pos": "ST", "kickoff": 41, "target": 86 },
+      { "pos": "W", "kickoff": 53, "target": 89 }
+    ]
+  },
+  "5-4-1": {
+    "style": "defensive",
+    "players": [
+      { "pos": "GK", "kickoff": 5, "target": 5 },
+      { "pos": "WB", "kickoff": 29, "target": 20 },
+      { "pos": "CB", "kickoff": 21, "target": 30 },
+      { "pos": "CB", "kickoff": 23, "target": 23 },
+      { "pos": "CB", "kickoff": 25, "target": 34 },
+      { "pos": "WB", "kickoff": 35, "target": 26 },
+      { "pos": "WM", "kickoff": 38, "target": 56 },
+      { "pos": "CM", "kickoff": 40, "target": 50 },
+      { "pos": "CM", "kickoff": 42, "target": 68 },
+      { "pos": "WM", "kickoff": 44, "target": 62 },
+      { "pos": "TS", "kickoff": 41, "target": 95 }
+    ]
+  },
+  "3-5-2": {
+    "style": "midfield control",
+    "players": [
+      { "pos": "GK", "kickoff": 5, "target": 5 },
+      { "pos": "CB", "kickoff": 21, "target": 30 },
+      { "pos": "CB", "kickoff": 23, "target": 23 },
+      { "pos": "CB", "kickoff": 25, "target": 34 },
+      { "pos": "WB", "kickoff": 38, "target": 56 },
+      { "pos": "DM", "kickoff": 32, "target": 41 },
+      { "pos": "CM", "kickoff": 40, "target": 58 },
+      { "pos": "CM", "kickoff": 42, "target": 60 },
+      { "pos": "WB", "kickoff": 44, "target": 62 },
+      { "pos": "ST", "kickoff": 49, "target": 85 },
+      { "pos": "ST", "kickoff": 51, "target": 87 }
+    ]
+  }
+}

@@ -23,6 +23,7 @@ Node 22.18+ (it runs the TypeScript directly, no build step for the engine).
 npm ci
 npm test             # engine, notation, replays, the coach loop
 npm run build        # one self-contained file: dist/index.html
+npm run dev          # the page with live reload while you work on it
 npm run typecheck
 ```
 
@@ -55,7 +56,16 @@ the page and the CLI run the same engine with the same seeded dice.
   the model-agnostic LLM coach: give it an `ask(prompt)` function.
 - `src/commentary.ts`: commentary lines from match events.
 - `src/cli.ts`: replay, verify and self-play.
-- `web/`: the page; `scripts/build-web.mjs` bundles it into `dist/index.html`.
+- `data/`: `formations.json` (each formation's style, and every player's position,
+  kick-off spot and target spot, in spot numbers from the Kernels' side) and
+  `builds.json` (stats by position). Edit them to change formations; match files
+  record a fingerprint of this data (`[Squads "…"]`) so replays stay exact.
+- `web/`: the page, Vue 3 + Vite. `web/src/lib/` holds plain TypeScript (board
+  drawing, the game store, claude.ai capabilities), `web/src/components/` the
+  Vue components, including the formation lab (Display panel, the L key, or
+  `#lab`): two formations against each other with the control map, editable,
+  with "Copy as JSON" for `data/formations.json`. `vite-plugin-singlefile` makes
+  `dist/index.html` one self-contained file.
 - `docs/rules.md`, `docs/notation.md`: the rules and the notation.
 
 ## Claude as a coach

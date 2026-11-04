@@ -60,3 +60,22 @@ test("formations are recorded in the match file and replayed", () => {
   assert.equal(JSON.stringify(r.state), JSON.stringify(m.state));
   assert.throws(() => newState({ formation: { K: "2-2-6" } }), RuleError);
 });
+
+test("match files record the formation data they were played with", async () => {
+  const { SQUAD_DATA, NotationError } = await import("../src/engine/index.ts");
+  const m = new Match({ seed: "data" });
+  m.play("/");
+  const text = m.toText();
+  assert.match(text, new RegExp(`\\[Squads "${SQUAD_DATA}"\\]`));
+  assert.doesNotThrow(() => Match.fromText(text, { verify: true }));
+  assert.throws(() => Match.fromText(text.replace(SQUAD_DATA, "00000000")), NotationError);
+  assert.doesNotThrow(() => Match.fromText(text.replace(/\[Squads "[^"]*"\]\n/, "")));   // older files without it still load
+});
+
+test("formation targets are on the pitch and distinct", () => {
+  for (const name of FORMATION_NAMES) {
+    const t = FORMATIONS[name].target.map(([q, r]) => hexAt(q, r));
+    assert.ok(t.every(h => h !== undefined), name);
+    assert.equal(new Set(t).size, 11, name);
+  }
+});

@@ -1,4 +1,3 @@
-@import url("https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Permanent+Marker&display=swap");
 :root{
   --paper:#e9edf5;--surface:#ffffff;--ink:#1a2040;--muted:#59618a;--line:#d3d9e8;
   --accent:#2449a8;--kernel:#7fae22;--shell:#6b4426;--warn:#c4372a;
@@ -113,7 +112,7 @@ details p{font-size:14px;margin:8px 0}
 .dot{fill:#161616}
 .hexnum{font:700 8.5px "Atkinson Hyperlegible",system-ui,sans-serif;text-anchor:middle;fill:#161616}
 .seglet{font:700 7.5px "Atkinson Hyperlegible",system-ui,sans-serif;text-anchor:middle;fill:#fff;paint-order:stroke;stroke:#161616;stroke-width:2;stroke-linejoin:round}
-.no-coords #coordNums,.no-coords #coordLets{display:none}
+.no-coords .coord-nums,.no-coords .coord-lets{display:none}
 .ctl-seg{opacity:.82;stroke:none}
 .no-ctrl #ctrl{display:none}
 .piece.mine{cursor:pointer}
@@ -156,3 +155,18 @@ details p{font-size:14px;margin:8px 0}
 .team.S .form{text-align:right}
 .card{font-variant-numeric:tabular-nums}
 .card b{font-weight:700}
+
+/* formation lab */
+.lab{width:min(1180px,96vw);max-height:94vh;border:1.5px solid var(--line);border-radius:16px;padding:14px 18px;background:var(--surface);color:var(--ink)}
+.lab::backdrop{background:rgba(16,20,42,.55)}
+.lab-head{display:flex;justify-content:space-between;align-items:center}
+.lab h2{font-family:"Permanent Marker","Comic Sans MS",cursive;font-weight:400;font-size:24px;margin:0}
+.lab .close{font-size:16px;padding:4px 10px}
+.lab-bar{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px 16px;align-items:center;margin:8px 0}
+.lab .mode{display:flex;flex-wrap:wrap;gap:12px}
+.lab-counts{display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px 16px;font-size:14px;color:var(--muted);margin:0 0 6px;font-variant-numeric:tabular-nums}
+.lab-pitch{display:block;width:100%;height:auto;max-height:62vh;background:#fbfbf8;border-radius:8px}
+.lab-spot{fill:transparent;cursor:pointer}
+.lab-spot:hover{fill:rgba(255,255,255,.35)}
+.lab .piece{cursor:pointer}
+.lab-json{margin-top:8px}

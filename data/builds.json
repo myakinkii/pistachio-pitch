@@ -1,0 +1,12 @@
+{
+  "GK": { "pac": 2, "sho": 1, "pas": 3, "dri": 1, "def": 2, "phy": 4, "kee": 5 },
+  "CB": { "pac": 2, "sho": 1, "pas": 3, "dri": 2, "def": 5, "phy": 5, "kee": 0 },
+  "FB": { "pac": 4, "sho": 1, "pas": 3, "dri": 3, "def": 4, "phy": 3, "kee": 0 },
+  "WB": { "pac": 5, "sho": 1, "pas": 3, "dri": 3, "def": 3, "phy": 3, "kee": 0 },
+  "DM": { "pac": 2, "sho": 1, "pas": 4, "dri": 2, "def": 5, "phy": 4, "kee": 0 },
+  "CM": { "pac": 3, "sho": 2, "pas": 5, "dri": 3, "def": 3, "phy": 2, "kee": 0 },
+  "WM": { "pac": 4, "sho": 2, "pas": 4, "dri": 4, "def": 2, "phy": 2, "kee": 0 },
+  "W": { "pac": 5, "sho": 3, "pas": 3, "dri": 5, "def": 1, "phy": 1, "kee": 0 },
+  "ST": { "pac": 4, "sho": 5, "pas": 2, "dri": 4, "def": 1, "phy": 2, "kee": 0 },
+  "TS": { "pac": 2, "sho": 5, "pas": 3, "dri": 3, "def": 1, "phy": 4, "kee": 0 }
+}

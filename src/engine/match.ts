@@ -5,6 +5,7 @@
 import { newState, apply, RULES_VERSION, type State, type Command, type Ev, type Options } from "./rules.ts";
 import { parseCommand, formatCommand, formatEvents, readMatch, writeMatch, NotationError, type MatchFile } from "./notation.ts";
 import type { TeamId } from "./geometry.ts";
+import { SQUAD_DATA } from "./squad.ts";
 
 export interface Entry { team: TeamId; turnNo: number; cmd: Command; text: string; result: string; events: Ev[] }
 
@@ -21,7 +22,7 @@ export class Match {
     this.headers = {
       Game: "Pistachio Pitch", Rules: RULES_VERSION, Seed: this.start.seed,
       AP: String(this.start.apPerTurn), Turns: String(this.start.maxTurns), FirstKick: this.start.firstKick,
-      FormationK: this.start.formation.K, FormationS: this.start.formation.S,
+      FormationK: this.start.formation.K, FormationS: this.start.formation.S, Squads: SQUAD_DATA,
       Kernels: "Kernels", Shells: "Shells", ...(opts.headers ?? {}),
     };
   }
@@ -65,6 +66,7 @@ export class Match {
     const f = readMatch(text);
     const h = f.headers;
     if (h.Rules && h.Rules !== RULES_VERSION) throw new NotationError(`this file uses rules ${h.Rules}, the engine has ${RULES_VERSION}`);
+    if (h.Squads && h.Squads !== SQUAD_DATA) throw new NotationError(`this file was played with other formation or build data (${h.Squads}, the engine has ${SQUAD_DATA})`);
     const m = new Match({
       seed: h.Seed ?? "pistachio", ap: h.AP ? +h.AP : undefined, turns: h.Turns ? +h.Turns : undefined,
       firstKick: h.FirstKick === "S" ? "S" : "K", headers: h,

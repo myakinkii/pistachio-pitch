@@ -35,8 +35,14 @@ to work on it.
   chances: update both when the rules change. The test "following the advice
   attacks" checks the analysis still leads somewhere (the advisor must outscore
   the bot).
-- `web/` must stay one self-contained file after `npm run build`: no CDN at run
-  time except Google Fonts (allowed in artifacts), no network calls.
+- `web/` is Vue 3 + Vite and must stay one self-contained file after `npm run build`
+  (vite-plugin-singlefile): no CDN at run time except Google Fonts (allowed in
+  artifacts), no network calls. Keep logic in `web/src/lib/` (plain TypeScript);
+  components only present it. The engine never imports anything from `web/`.
+- Formations and builds live in `data/*.json`. Changing them changes how matches
+  play out: the `[Squads "…"]` fingerprint in match files catches that, so old
+  files are refused rather than replayed wrong. Mention data changes in
+  `docs/rules.md`.
 
 ## Tests
 
