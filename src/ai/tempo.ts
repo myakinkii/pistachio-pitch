@@ -11,7 +11,7 @@
 //                between its lines (defence, midfield, attack)
 
 import {
-  newState, HEXES, hexAt, hexDist, mirror, other, segHex, cx, cy, PENALTY_SPOT, FORMATIONS, BUILDS, PASS_RANGE,
+  newState, HEXES, hexAt, hexDist, mirror, other, segHex, cx, cy, PENALTY_SPOT, FORMATIONS, BUILDS, PASS_RANGE, territory,
   type State, type TeamId,
 } from "../engine/index.ts";
 import { laneSafety } from "./odds.ts";
@@ -96,6 +96,7 @@ export interface Coverage {
   depth: number;                          // rows (in spots) from the deepest to the highest outfield player
   lines: { line: "D" | "M" | "F"; at: number; width: number }[]; // average height (spots from own goal line) and width of each line
   gaps: number[];                         // spots between consecutive lines
+  territory: number;                      // empty spots this side would get to first (influence.ts)
 }
 /** How a side's shape covers the pitch, in spots, measured from its own goal line. */
 export function coverage(s: State, team: TeamId): Coverage {
@@ -114,6 +115,7 @@ export function coverage(s: State, team: TeamId): Coverage {
     depth: round(span(out.map(p => up(segHex(p.seg))))),
     lines,
     gaps: lines.slice(1).map((l, i) => round(l.at - lines[i].at)),
+    territory: territory(s)[team],
   };
 }
 const round = (x: number) => Math.round(x * 10) / 10;

@@ -4,13 +4,13 @@
 // then a spot. "Copy as JSON" gives a data/formations.json with your changes.
 import { ref, reactive, computed, watch } from "vue";
 import {
-  newState, control, HEXES, hexByNum, hexAt, hexDist, mirror, segHex, pixelOf, FORMATIONS, FORMATION_NAMES, BUILDS,
+  newState, control, territory, HEXES, hexByNum, hexAt, hexDist, mirror, segHex, pixelOf, FORMATIONS, FORMATION_NAMES, BUILDS,
   type TeamId,
 } from "../../../src/engine/index.ts";
 import { chain } from "../../../src/ai/tempo.ts";
 import { analyze, passOdds, pct } from "../../../src/ai/odds.ts";
 import { reach, passTargets, playerById } from "../../../src/engine/index.ts";
-import { DEFS, BALL, staticBoard, viewBox, pieceSvg, controlSvg, ballTransform, centre, segPts, segCentroid, upright, playerName, R, HH } from "../lib/draw.ts";
+import { DEFS, BALL, staticBoard, viewBox, pieceSvg, controlSvg, influenceSvg, ballTransform, centre, segPts, segCentroid, upright, playerName, R, HH } from "../lib/draw.ts";
 import { store, prefs } from "../lib/game.ts";
 
 type Draft = Record<string, { style: string; players: { pos: string; kickoff: number; target: number }[] }>;
@@ -23,7 +23,7 @@ function fromEngine(): Draft {
 }
 const draft = reactive<Draft>(fromEngine());
 const edited = ref(false);
-const pick = reactive({ K: "4-4-2", S: "5-4-1", mode: "target" as "target" | "kickoff", numbers: true, ball: false });
+const pick = reactive({ K: "4-4-2", S: "5-4-1", mode: "target" as "target" | "kickoff", numbers: true, ball: false, influence: true });
 const ballAt = ref<string | null>(null);   // who has the ball ("K10"), with the Ball tool
 const preview = ref<number | null>(null);  // pass target under the pointer
 const sel = ref<string | null>(null);   // "K7"
@@ -99,7 +99,8 @@ const counts = computed(() => {
   };
   const hexes = state.value.players.map(p => segHex(p.seg));
   const shared = new Set(hexes.filter((h, i) => hexes.indexOf(h) !== i)).size;
-  return { K: stat("K"), S: stat("S"), shared };
+  const terr = territory(state.value);
+  return { K: { ...stat("K"), terr: terr.K }, S: { ...stat("S"), terr: terr.S }, shared };
 });
 /** Tempo, from the shapes as edited here: development (kick-off to target) and the keeper's chain to the box. */
 const tempo = computed(() => {
@@ -175,13 +176,14 @@ async function copy() {
         <label class="ctl"><input type="radio" value="target" v-model="pick.mode"> Target shapes</label>
         <label class="ctl"><input type="radio" value="kickoff" v-model="pick.mode"> Kick-off</label>
         <label class="ctl"><input type="checkbox" v-model="pick.numbers"> Spot numbers</label>
+        <label class="ctl" title="A lighter tint on the empty spots each side would get to first"><input type="checkbox" v-model="pick.influence"> Influence</label>
         <label class="ctl" title="Then click a pistachio to give him the ball"><input type="checkbox" v-model="pick.ball" @change="!pick.ball && (ballAt = null, preview = null)"> Ball</label>
       </div>
       <label class="ctl">Shells <select v-model="pick.S"><option v-for="n in FORMATION_NAMES" :key="n" :value="n">{{ n }}, {{ draft[n].style }}</option></select></label>
     </div>
     <p class="lab-counts">
-      <span>Kernels {{ pick.K }}: {{ counts.K.all }} segments, {{ counts.K.theirs }} in the Shells’ half</span>
-      <span>Shells {{ pick.S }}: {{ counts.S.all }} segments, {{ counts.S.theirs }} in the Kernels’ half</span>
+      <span>Kernels {{ pick.K }}: {{ counts.K.all }} segments, {{ counts.K.theirs }} in the Shells’ half; first to {{ counts.K.terr }} empty spots</span>
+      <span>Shells {{ pick.S }}: {{ counts.S.all }} segments, {{ counts.S.theirs }} in the Kernels’ half; first to {{ counts.S.terr }} empty spots</span>
     </p>
     <p class="lab-counts">
       <span>Kernels {{ tempo.K }}</span>
@@ -192,6 +194,7 @@ async function copy() {
       <defs v-html="DEFS" />
       <g :transform="prefs.rot ? `rotate(${-prefs.rot})` : undefined">
         <g v-html="staticHtml" />
+        <g v-if="pick.influence" v-html="influenceSvg(state)" />
         <g v-html="controlSvg(state)" />
         <g v-html="spotsHtml" />
         <g v-html="ballLayers.lo" />

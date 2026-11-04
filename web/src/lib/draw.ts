@@ -2,7 +2,7 @@
 // (rot = 0 upright, 90 sideways); used by the match pitch and the formation lab.
 
 import {
-  HEXES, NSEG, segExists, segIsGoal, segZone, segHex, pixelOf, LETTERS, PENALTY_SPOT, control, carrier, hexOf,
+  HEXES, NSEG, segExists, segIsGoal, segZone, segHex, pixelOf, LETTERS, PENALTY_SPOT, control, influence, carrier, hexOf,
   type State, type Player, type TeamId, type Zone,
 } from "../../../src/engine/index.ts";
 
@@ -116,5 +116,16 @@ export function pieceSvg(p: Player, o: { rot: number; mine?: boolean; selected?:
 export function controlSvg(s: State): string {
   let h = "";
   for (const [seg, t] of control(s)) h += `<polygon class="ctl-seg" points="${segPts(seg)}" fill="${t === "K" ? KIT.K2 : KIT.S2}"/>`;
+  return h;
+}
+
+/** Influence on the empty spots: a lighter tint of the side that would get there first. */
+export function influenceSvg(s: State): string {
+  let h = "";
+  for (const [hex, v] of influence(s)) {
+    if (!v.owner) continue;
+    const fill = v.owner === "K" ? KIT.K2 : KIT.S2;
+    for (let k = 0; k < 6; k++) { const seg = hex * 6 + k; if (segExists(seg)) h += `<polygon points="${segPts(seg)}" fill="${fill}" fill-opacity="0.32" stroke="none"/>`; }
+  }
   return h;
 }
