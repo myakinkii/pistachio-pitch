@@ -7,8 +7,8 @@ import { FORMATIONS, FORMATION_NAMES, BUILDS, POSITION_NAMES } from "../../../sr
 import { STAT_LABEL } from "../lib/game.ts";
 import { TEAM } from "../lib/draw.ts";
 import {
-  album, SEASON, TIERS, TIER_NAME, STICKER, completion, expected, openPacks, place, setRoster, setSettings, resetSettings, restart,
-  portraitSvg, type Tier,
+  album, SEASON, TIERS, TIER_NAME, STICKER, completion, expected, openPacks, place, setUseBuild, setUsePerk, setRoster, setSettings, resetSettings, restart,
+  portraitSvg, squadBudget, buildFits, type Tier,
 } from "../lib/album.ts";
 import StickerCard from "./StickerCard.vue";
 
@@ -28,18 +28,16 @@ const opened = ref(0);   // bumped to restart the reveal animation
 function openOne() { openPacks(1); opened.value++; }
 
 // ---- roster ----
-const slots = computed(() => FORMATIONS[st.value.roster.formation].slots.map(([pos], i) => {
-  const id = st.value.roster.spots[i];
-  return { i, pos, sticker: id ? STICKER.get(id) ?? null : null };
-}));
+const budget = computed(() => squadBudget(st.value.roster, SEASON));
+const slots = computed(() => budget.value.spots.map((b, i) => ({ i, pos: b.role, sticker: b.sticker, b })));
 const ownedList = computed(() => SEASON.stickers.filter(s => st.value.owned[s.id]));
 const choices = computed(() => {
   if (album.pick === null) return [];
   const pos = slots.value[album.pick].pos;
-  return ownedList.value.slice().sort((a, b) => Number(b.pos === pos) - Number(a.pos === pos) || a.no - b.no);
+  return ownedList.value.slice().sort((a, b) => Number(buildFits(b, pos)) - Number(buildFits(a, pos)) || a.no - b.no);
 });
 const spotOf = (id: string) => st.value.roster.spots.indexOf(id);
-const statLine = (pos: string) => STAT_LABEL.filter(([k]) => k !== "kee" || pos === "GK").map(([k, l]) => `${l} ${BUILDS[pos][k]}`).join(" · ");
+const statLine = (pos: string, s: typeof BUILDS[string]) => STAT_LABEL.filter(([k]) => k !== "kee" || pos === "GK").map(([k, l]) => `${l} ${s[k]}`).join(" · ");
 
 // ---- lab ----
 const form = reactive({ cards: 0, rates: { common: 0, rare: 0, legendary: 0 } as Record<Tier, number>, seed: "" });
@@ -96,17 +94,29 @@ const pct = (n: number, d: number) => (d ? Math.round(n / d * 100) : 0);
             <option v-for="f in FORMATION_NAMES" :key="f" :value="f">{{ f }}, {{ FORMATIONS[f].style }}</option>
           </select>
         </label>
-        <span class="al-note">Pick a spot, then one of your stickers. Not used in matches yet.</span>
+        <span class="al-budget" :class="{ over: budget.left < 0 }" role="status">
+          Budget {{ budget.pool }} · spent {{ budget.spent }} ·
+          <b>{{ budget.left < 0 ? `${budget.left}: over budget, fix before playing` : `${budget.left} left` }}</b>
+        </span>
       </div>
+      <p class="al-note">Pick a spot, then one of your stickers. A sticker made for that position can bring his own build instead of the formation's template; rares can lift one stat to 6, and legendaries bring a perk. Not used in matches yet.</p>
       <ol class="al-roster">
         <li v-for="x in slots" :key="x.i" :class="{ on: album.pick === x.i }">
           <button type="button" class="al-spot" :aria-label="`Spot ${x.i + 1}, ${POSITION_NAMES[x.pos]}: ${x.sticker ? x.sticker.name : 'empty'}`" @click="album.pick = album.pick === x.i ? null : x.i">
             <span class="al-mini" :class="{ ph: !x.sticker }" v-html="portraitSvg(x.sticker?.id ?? 'placeholder', { team, gk: x.pos === 'GK' })"></span>
             <span class="al-spot-txt">
               <b>#{{ x.i + 1 }} {{ x.pos }}</b> {{ x.sticker ? x.sticker.name : "placeholder" }}
-              <small>{{ statLine(x.pos) }}<template v-if="x.sticker?.bonus"> · {{ x.sticker.bonus.type === "perk" ? x.sticker.bonus.name : x.sticker.bonus.text }}</template></small>
+              <small>{{ statLine(x.pos, x.b.stats) }} · <b>{{ x.b.cost }} pts</b><template v-if="x.b.unlock"> (unlock {{ x.b.unlock }})</template><template v-if="x.b.perk"> (perk {{ x.b.perk }})</template></small>
             </span>
           </button>
+          <label v-if="x.sticker?.build" class="ctl al-usebuild" :class="{ off: !x.b.canUse }">
+            <input type="checkbox" :disabled="!x.b.canUse" :checked="x.b.source === 'card'" @change="setUseBuild(x.i, ($event.target as HTMLInputElement).checked)">
+            {{ x.b.canUse ? `Use his build: ${x.sticker.style}` : `His build is for a ${POSITION_NAMES[x.sticker.pos ?? ""]}` }}
+          </label>
+          <label v-if="x.sticker?.bonus?.type === 'perk' && x.b.canUse" class="ctl al-usebuild">
+            <input type="checkbox" :checked="st.roster.perks[x.i]" @change="setUsePerk(x.i, ($event.target as HTMLInputElement).checked)">
+            Apply his perk: {{ x.sticker.bonus.name }} ({{ x.sticker.bonus.cost ?? 0 }} pts)
+          </label>
         </li>
       </ol>
       <div v-if="album.pick !== null" class="al-picker">

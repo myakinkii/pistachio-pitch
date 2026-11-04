@@ -4,9 +4,11 @@
 // tiers. Packs are drawn with the engine's seeded generator, whose state is kept
 // in the album, so an album replays exactly from its seed: the same code can roll
 // packs in the page now and on a server later. Nothing here touches the match
-// rules: stickers fill album slots and can be placed in a roster, nothing more.
+// rules: stickers fill album slots and can be placed in a roster, where their
+// builds are priced against the team's budget (squadBudget), nothing more yet.
 
 import { seedState, next } from "../engine/rng.ts";
+import { BUILDS, FORMATIONS, BUDGET, STAT_KEYS, type Stats } from "../engine/squad.ts";
 
 export const TIERS = ["common", "rare", "legendary"] as const;
 export type Tier = (typeof TIERS)[number];
@@ -27,14 +29,23 @@ export const ADDONS = ["goggles", "specs", "shades", "sweatband", "plaster", "ar
 
 export type Face = { [K in Exclude<keyof typeof TRAITS, "marks">]?: (typeof TRAITS)[K][number] } &
   { marks?: (typeof TRAITS)["marks"][number][]; salted?: boolean };
+/**
+ * Rares unlock something for the position they're placed on: "cap" lets one stat
+ * go up to max, for cost points from the budget. Legendaries bring a perk.
+ */
 export type Bonus =
-  | { type: "slot"; line: string; text: string }
+  | { type: "unlock"; what: "cap"; max: number; cost: number; text: string }
   | { type: "perk"; name: string; text: string; cost: number | null };
 
 /**
  * A sticker. Season one only has faces: a pistachio with a look, optionally with
  * add-ons drawn in and a bonus (rares and legendaries). Add-on stickers
  * ({kind: "addon", addon}) are planned and accepted by the loader, but not used yet.
+ *
+ * build is the sticker's archetype (style): a suggested way to spend points on
+ * his position, which the roster can use instead of the formation's template.
+ * A common's adds up to the budget (18); rares and legendaries may cost more,
+ * and a rare with a cap unlock may take one stat above 5.
  */
 export interface Sticker {
   no: number;
@@ -43,15 +54,19 @@ export interface Sticker {
   kind: "face" | "addon";
   name: string;
   pos?: string;
+  style?: string;
+  build?: Stats;
   face?: Face;
   addon?: string;
   addons?: string[];
   bonus?: Bonus;
 }
 export interface PackSettings { cards: number; rates: Record<Tier, number> }
-export interface Season { season: string; title: string; pack: PackSettings; stickers: Sticker[] }
+/** squad.pool: the team's stat points for the roster (default 18 a player, 198). */
+export interface Season { season: string; title: string; pack: PackSettings; squad: { pool: number }; stickers: Sticker[] }
 
-export interface Roster { team: "K" | "S"; formation: string; spots: (string | null)[] }
+/** spots: sticker ids by formation number; builds, perks: whether that spot uses the sticker's build, his perk. */
+export interface Roster { team: "K" | "S"; formation: string; spots: (string | null)[]; builds: boolean[]; perks: boolean[] }
 export interface AlbumState {
   v: 1;
   season: string;
@@ -75,6 +90,8 @@ export function loadSeason(raw: unknown, positions: string[]): Season {
   if (!isObj(raw) || typeof raw.season !== "string" || typeof raw.title !== "string") fail("a season needs season and title");
   const r = raw as Record<string, unknown>;
   const pack = checkSettings(r.pack) ?? fail(`${r.season}: bad pack settings`);
+  const sq = r.squad === undefined ? { pool: POOL } : r.squad;
+  if (!isObj(sq) || !Number.isInteger(sq.pool) || (sq.pool as number) < 1) fail(`${r.season}: squad.pool must be a whole number above 0`);
   if (!Array.isArray(r.stickers) || !r.stickers.length) fail(`${r.season}: no stickers`);
   const ids = new Set<string>(), nos = new Set<number>();
   for (const s of r.stickers as unknown[]) {
@@ -100,14 +117,39 @@ export function loadSeason(raw: unknown, positions: string[]): Season {
     if (st.bonus !== undefined) {
       const b = st.bonus as Record<string, unknown>;
       const ok = isObj(b) && typeof b.text === "string" &&
-        ((b.type === "slot" && typeof b.line === "string") ||
-         (b.type === "perk" && typeof b.name === "string" && (b.cost === null || typeof b.cost === "number")));
+        ((b.type === "unlock" && b.what === "cap" && Number.isInteger(b.max) && (b.max as number) > 5 && Number.isInteger(b.cost) && (b.cost as number) >= 0) ||
+         (b.type === "perk" && typeof b.name === "string" && (b.cost === null || (Number.isInteger(b.cost) && (b.cost as number) >= 0))));
       if (!ok) fail(`${at}: bad bonus`);
+    }
+    if (st.style !== undefined && typeof st.style !== "string") fail(`${at}: style must be text`);
+    if (st.build !== undefined) {
+      const why = checkBuild(st.build, st.pos as string, st.tier as Tier, st.bonus as Bonus | undefined);
+      if (why) fail(`${at}: build: ${why}`);
     }
     ids.add(st.id as string); nos.add(st.no as number);
   }
   for (const t of TIERS) if (!(r.stickers as Sticker[]).some(s => s.tier === t)) fail(`${r.season}: no ${t} stickers`);
-  return { season: r.season as string, title: r.title as string, pack, stickers: (r.stickers as Sticker[]).slice().sort((a, b) => a.no - b.no) };
+  return { season: r.season as string, title: r.title as string, pack, squad: { pool: (sq as { pool: number }).pool }, stickers: (r.stickers as Sticker[]).slice().sort((a, b) => a.no - b.no) };
+}
+
+/** Why a sticker's build can't be used, or null if it's fine. */
+function checkBuild(b: unknown, pos: string, tier: Tier, bonus: Bonus | undefined): string | null {
+  if (!isObj(b)) return "not an object";
+  const cap = bonus?.type === "unlock" ? bonus.max : 5;
+  let sum = 0, above = 0;
+  for (const k of STAT_KEYS) {
+    const v = b[k];
+    if (!Number.isInteger(v)) return `${k} missing`;
+    const n = v as number;
+    if (k === "kee" && pos !== "GK") { if (n !== 0) return "only keepers have kee"; continue; }
+    if (n < 1 || n > cap) return `${k} ${n} is outside 1 to ${cap}`;
+    if (n > 5) above++;
+    sum += n;
+  }
+  if (above > 1) return "the unlock lifts one stat only";
+  if (tier === "common" && sum !== BUDGET) return `a common's build adds up to ${BUDGET}, not ${sum}`;
+  if (sum < BUDGET) return `adds up to ${sum}, less than ${BUDGET}`;
+  return null;
 }
 
 /** Pack settings, or null when they don't make sense (cards 1..20, rates >= 0 with a positive sum). */
@@ -126,7 +168,7 @@ export const ROSTER_SIZE = 11;
 export function newAlbum(season: Season, seed: string, formation = "4-4-2"): AlbumState {
   return {
     v: 1, season: season.season, seed, rng: seedState(seed), packs: 0, owned: {},
-    roster: { team: "K", formation, spots: Array(ROSTER_SIZE).fill(null) },
+    roster: { team: "K", formation, spots: Array(ROSTER_SIZE).fill(null), builds: Array(ROSTER_SIZE).fill(false), perks: Array(ROSTER_SIZE).fill(false) },
     settings: { cards: season.pack.cards, rates: { ...season.pack.rates } },
   };
 }
@@ -219,21 +261,86 @@ export function checkAlbum(raw: unknown, season: Season, formations: string[]): 
   const known = new Set(season.stickers.map(s => s.id)), owned: Record<string, number> = {};
   for (const [id, n] of Object.entries(raw.owned)) if (known.has(id) && Number.isInteger(n) && (n as number) > 0) owned[id] = Math.min(n as number, 9999);
   const r = isObj(raw.roster) ? raw.roster : {};
+  const seen = new Set<string>();
+  const spots = Array.from({ length: ROSTER_SIZE }, (_, i) => {
+    const id = Array.isArray(r.spots) ? r.spots[i] : null;
+    if (typeof id !== "string" || !owned[id] || seen.has(id)) return null;
+    seen.add(id); return id;
+  });
   const roster: Roster = {
     team: r.team === "S" ? "S" : "K",
     formation: typeof r.formation === "string" && formations.includes(r.formation) ? r.formation : formations[0],
-    spots: Array.from({ length: ROSTER_SIZE }, (_, i) => {
-      const id = Array.isArray(r.spots) ? r.spots[i] : null;
-      return typeof id === "string" && owned[id] ? id : null;
-    }),
+    spots,
+    builds: spots.map((id, i) => id !== null && Array.isArray(r.builds) && r.builds[i] === true),   // older albums had none
+    perks: spots.map((id, i) => id !== null && Array.isArray(r.perks) && r.perks[i] === true),
   };
   return { v: 1, season: season.season, seed: raw.seed, rng: raw.rng as number, packs: raw.packs as number, owned, roster, settings };
 }
 
-/** Put an owned sticker in a roster spot (or clear it with null). A sticker sits in one spot at most. */
+/**
+ * Put an owned sticker in a roster spot (or clear it with null). A sticker sits in
+ * one spot at most; the spot starts on the formation's template build.
+ */
 export function placeInRoster(state: AlbumState, spot: number, id: string | null): AlbumState {
   if (spot < 0 || spot >= ROSTER_SIZE || (id !== null && !state.owned[id])) return state;
-  const spots = state.roster.spots.map(x => (x === id ? null : x));
-  spots[spot] = id;
-  return { ...state, roster: { ...state.roster, spots } };
+  const spots = state.roster.spots.slice(), builds = state.roster.builds.slice(), perks = state.roster.perks.slice();
+  spots.forEach((x, i) => { if (x === id) { spots[i] = null; builds[i] = false; perks[i] = false; } });
+  spots[spot] = id; builds[spot] = false; perks[spot] = false;
+  return { ...state, roster: { ...state.roster, spots, builds, perks } };
+}
+/** Use the sticker's own build on a spot (true), or the formation's template (false). */
+export function useBuild(state: AlbumState, spot: number, on: boolean): AlbumState {
+  if (spot < 0 || spot >= ROSTER_SIZE || (on && !state.roster.spots[spot])) return state;
+  const builds = state.roster.builds.slice();
+  builds[spot] = on;
+  return { ...state, roster: { ...state.roster, builds } };
+}
+
+/** Apply the sticker's perk on a spot (true) or not (false). */
+export function usePerk(state: AlbumState, spot: number, on: boolean): AlbumState {
+  if (spot < 0 || spot >= ROSTER_SIZE || (on && !state.roster.spots[spot])) return state;
+  const perks = state.roster.perks.slice();
+  perks[spot] = on;
+  return { ...state, roster: { ...state.roster, perks } };
+}
+
+// ---------- the squad's budget ----------
+
+/** The default pool of stat points: the per-player budget times eleven. Seasons set their own (squad.pool). */
+export const POOL = BUDGET * ROSTER_SIZE;
+export interface SpotBudget {
+  role: string;                       // the position in the formation
+  sticker: Sticker | null;
+  source: "template" | "card";        // where the stats come from
+  stats: Stats;
+  cost: number;                       // points from the pool, unlock and perk included
+  unlock: number;                     // of which for the unlock
+  perk: number;                       // of which for the perk
+  canUse: boolean;                    // the sticker's build and perk fit this position
+}
+const statSum = (s: Stats) => STAT_KEYS.reduce((a, k) => a + s[k], 0);
+/** Only a build (and perk) made for the position goes on it. */
+export const buildFits = (s: Sticker | null | undefined, role: string): boolean => !!s?.build && s.pos === role;
+
+/**
+ * What a roster costs. Every spot plays the formation's template build, or the
+ * placed sticker's own build when chosen (and made for that position); a stat
+ * above 5 also pays for the rare's unlock, and a legendary's perk costs its
+ * cost when applied (on his own position too). left goes negative when the
+ * squad costs more than the season's pool: the roster then needs fixing.
+ */
+export function squadBudget(roster: Roster, season: Season) {
+  const byId = new Map(season.stickers.map(s => [s.id, s]));
+  const spots: SpotBudget[] = FORMATIONS[roster.formation].slots.map(([role], i) => {
+    const sticker = (roster.spots[i] && byId.get(roster.spots[i]!)) || null;
+    const canUse = buildFits(sticker, role);
+    const card = canUse && roster.builds[i];
+    const stats = card ? sticker!.build! : BUILDS[role];
+    const bonus = sticker?.bonus;
+    const unlock = card && bonus?.type === "unlock" && STAT_KEYS.some(k => stats[k] > 5) ? bonus.cost : 0;
+    const perk = canUse && roster.perks[i] && bonus?.type === "perk" ? bonus.cost ?? 0 : 0;
+    return { role, sticker, source: card ? "card" : "template", stats, cost: statSum(stats) + unlock + perk, unlock, perk, canUse };
+  });
+  const spent = spots.reduce((a, s) => a + s.cost, 0), pool = season.squad.pool;
+  return { pool, spent, left: pool - spent, spots };
 }

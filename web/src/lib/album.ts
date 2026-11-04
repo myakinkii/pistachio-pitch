@@ -4,14 +4,14 @@
 
 import { reactive, watch } from "vue";
 import {
-  SEASON, TIERS, newAlbum, openPack, checkAlbum, checkSettings, placeInRoster, completion, expected,
+  SEASON, TIERS, newAlbum, openPack, checkAlbum, checkSettings, placeInRoster, useBuild, usePerk, completion, expected, squadBudget, buildFits, POOL,
   type AlbumState, type Pack, type Sticker, type Tier, type PackSettings,
 } from "../../../src/album/index.ts";
 import { FORMATION_NAMES, DEFAULT_FORMATION } from "../../../src/engine/index.ts";
 import { KIT } from "./draw.ts";
 import portraitData from "../../../data/seasons/s1-portraits.json" with { type: "json" };
 
-export { SEASON, TIERS, completion, expected, type Sticker, type Tier };
+export { SEASON, TIERS, completion, expected, squadBudget, buildFits, POOL, type Sticker, type Tier };
 export const TIER_NAME: Record<Tier, string> = { common: "Commons", rare: "Rares", legendary: "Legendaries" };
 export const STICKER = new Map(SEASON.stickers.map(s => [s.id, s]));
 
@@ -44,6 +44,8 @@ export function openPacks(n = 1) {
   album.lastBatch = n === 1 ? 0 : n;
 }
 export function place(spot: number, id: string | null) { album.state = placeInRoster(album.state, spot, id); album.pick = null; }
+export function setUseBuild(spot: number, on: boolean) { album.state = useBuild(album.state, spot, on); }
+export function setUsePerk(spot: number, on: boolean) { album.state = usePerk(album.state, spot, on); }
 export function setRoster(p: Partial<Pick<AlbumState["roster"], "team" | "formation">>) { album.state = { ...album.state, roster: { ...album.state.roster, ...p } }; }
 export function setSettings(x: PackSettings) { const s = checkSettings(x); if (s) album.state = { ...album.state, settings: s }; return !!s; }
 export function resetSettings() { album.state = { ...album.state, settings: { cards: SEASON.pack.cards, rates: { ...SEASON.pack.rates } } }; }

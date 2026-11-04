@@ -231,3 +231,14 @@ details p{font-size:14px;margin:8px 0}
 .al-form input{width:84px;font:inherit;font-size:14px;color:var(--ink);background:var(--surface);border:1.5px solid var(--line);border-radius:10px;padding:5px 8px}
 .al-table{max-width:420px}
 .al-table td:not(:first-child),.al-table th{text-align:right;font-variant-numeric:tabular-nums}
+.st-style{font-style:italic;color:var(--muted)}
+.st-stats .up b{color:#2f8a3a}.st-stats .up b::after{content:"▲";font-size:8px;vertical-align:2px}
+.st-stats .down b{color:var(--warn)}.st-stats .down b::after{content:"▼";font-size:8px;vertical-align:2px}
+.st-stats .top b{color:var(--legendary);background:color-mix(in srgb,var(--legendary) 18%,transparent);border-radius:3px;padding:0 2px}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .st-stats .up b{color:#7fd28a}}
+:root[data-theme="dark"] .st-stats .up b{color:#7fd28a}
+.al-budget{font-size:14px;font-variant-numeric:tabular-nums;padding:4px 10px;border-radius:8px;border:1.5px solid var(--line)}
+.al-budget.over{border-color:var(--warn);color:var(--warn)}
+.al-roster li{display:flex;flex-direction:column;gap:4px}
+.al-usebuild{font-size:13px;padding-left:4px}
+.al-usebuild.off{opacity:.6}
