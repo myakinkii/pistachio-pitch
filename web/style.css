@@ -114,6 +114,8 @@ details p{font-size:14px;margin:8px 0}
 .hexnum{font:700 8.5px "Atkinson Hyperlegible",system-ui,sans-serif;text-anchor:middle;fill:#161616}
 .seglet{font:700 7.5px "Atkinson Hyperlegible",system-ui,sans-serif;text-anchor:middle;fill:#fff;paint-order:stroke;stroke:#161616;stroke-width:2;stroke-linejoin:round}
 .no-coords #coordNums,.no-coords #coordLets{display:none}
+.ctl-seg{opacity:.82;stroke:none}
+.no-ctrl #ctrl{display:none}
 .piece.mine{cursor:pointer}
 .num{font:700 9.5px "Atkinson Hyperlegible",system-ui,sans-serif;text-anchor:middle;pointer-events:none}
 .num.K{fill:#fff;paint-order:stroke;stroke:#3d1430;stroke-width:2.2}

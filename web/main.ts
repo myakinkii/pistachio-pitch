@@ -5,7 +5,7 @@
 import {
   Match, HEXES, NSEG, segExists, segIsGoal, segZone, segHex, pixelOf, LETTERS, PENALTY_SPOT,
   reach, passTargets, laneThreats, carrier, hexOf, inHex, playerOf, attackGoal, hexDist, segName, hexName,
-  RuleError, NotationError, formatCommand as fmt, type State, type Player, type TeamId, type Zone, type Entry,
+  RuleError, NotationError, formatCommand as fmt, control, type State, type Player, type TeamId, type Zone, type Entry,
 } from "../src/engine/index.ts";
 import { botCommand } from "../src/ai/bot.ts";
 import { analyze } from "../src/ai/odds.ts";
@@ -84,7 +84,7 @@ const ballSvg = `<g filter="url(#drop)"><circle r="${BR}" fill="#fff"/><g clip-p
   ${[0, 1, 2, 3, 4].map(k => { const a = (-90 + 72 * k) * DEG; return `<line x1="${(4.9 * Math.cos(a)).toFixed(2)}" y1="${(4.9 * Math.sin(a)).toFixed(2)}" x2="${(BR * Math.cos(a)).toFixed(2)}" y2="${(BR * Math.sin(a)).toFixed(2)}" stroke="#111" stroke-width="0.9"/>`; }).join("")}
   </g><circle r="${BR}" fill="none" stroke="#111" stroke-width="1.8"/></g>`;
 
-let lowG: Element, topG: Element, ballEl: SVGGElement;
+let lowG: Element, topG: Element, ctrlG: Element, ballEl: SVGGElement;
 function buildBoard() {
   svg.setAttribute("viewBox", ROT
     ? `${minY.toFixed(1)} ${-maxX} ${(maxY - minY).toFixed(1)} ${maxX - minX}`
@@ -94,8 +94,8 @@ function buildBoard() {
   <clipPath id="clipS"><ellipse rx="9.4" ry="13.4"/></clipPath>
   <clipPath id="ballClip"><circle r="12"/></clipPath>
   <filter id="drop" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="1.2" stdDeviation="1.1" flood-opacity=".45"/></filter>
-</defs><g${ROT ? ` transform="rotate(${-ROT})"` : ""}><g>${buildStatic()}</g><g id="low"></g><g id="coordLets" pointer-events="none">${lettersSvg()}</g><g id="ball">${ballSvg}</g><g id="top"></g></g>`;
-  lowG = document.getElementById("low")!; topG = document.getElementById("top")!;
+</defs><g${ROT ? ` transform="rotate(${-ROT})"` : ""}><g>${buildStatic()}</g><g id="ctrl"></g><g id="low"></g><g id="coordLets" pointer-events="none">${lettersSvg()}</g><g id="ball">${ballSvg}</g><g id="top"></g></g>`;
+  lowG = document.getElementById("low")!; topG = document.getElementById("top")!; ctrlG = document.getElementById("ctrl")!;
   ballEl = document.getElementById("ball") as unknown as SVGGElement;
   document.querySelector(".app")!.classList.toggle("wide", ROT !== 0);
   placeStatus();
@@ -317,6 +317,10 @@ function renderBoard() {
     tp += `<circle class="t-tackle" data-act="tackle" tabindex="0" aria-label="Tackle" cx="${b.x}" cy="${b.y}" r="16"/>`;
   }
   lowG.innerHTML = lo; topG.innerHTML = tp;
+  // who controls which segments: magenta for the Kernels, coffee for the Shells
+  let ct = "";
+  if (!svg.classList.contains("no-ctrl")) for (const [seg, t] of control(s)) ct += `<polygon class="ctl-seg" points="${segPts(seg)}" fill="${t === "K" ? KIT.K2 : KIT.S2}"/>`;
+  ctrlG.innerHTML = ct;
   // the ball sits at its carrier's feet
   const bc = centre(bh);
   let x = bc.x, y = bc.y;
@@ -456,6 +460,16 @@ const coordBox = $("coordToggle") as HTMLInputElement;
 const applyCoords = () => { svg.classList.toggle("no-coords", !coordBox.checked); };
 function toggleCoords() { coordBox.checked = !coordBox.checked; applyCoords(); }
 coordBox.addEventListener("change", applyCoords);
+// Control overlay: a per-browser preference, on unless switched off.
+const ctrlBox = $("ctrlToggle") as HTMLInputElement;
+function setControl(on: boolean) {
+  ctrlBox.checked = on;
+  svg.classList.toggle("no-ctrl", !on);
+  try { localStorage.setItem("pp-ctrl", on ? "1" : "0"); } catch { /* storage unavailable */ }
+  renderBoard();
+}
+try { if (localStorage.getItem("pp-ctrl") === "0") { ctrlBox.checked = false; svg.classList.add("no-ctrl"); } } catch { /* storage unavailable */ }
+ctrlBox.addEventListener("change", () => setControl(ctrlBox.checked));
 // Sideways pitch: a per-browser preference.
 const rotBox = $("rotate") as HTMLInputElement;
 rotBox.checked = ROT === 90;
@@ -479,6 +493,7 @@ document.addEventListener("keydown", e => {
   const typing = t.tagName === "TEXTAREA" || t.tagName === "SELECT" || (t.tagName === "INPUT" && t.type !== "checkbox" && t.type !== "range");
   if (typing || e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.key === "c" || e.key === "C") toggleCoords();
+  if (e.key === "v" || e.key === "V") setControl(!ctrlBox.checked);
   if (e.key === "r" || e.key === "R") { rotBox.checked = !rotBox.checked; setRotation(rotBox.checked); }
   if (view !== null && (e.key === "ArrowRight" || e.key === "ArrowLeft")) step(e.key === "ArrowRight" ? 1 : -1);
 });
