@@ -10,6 +10,7 @@ import {
   reach, passTargets, laneThreats, inHex, carrier, hexOf,
   type State, type Player, type TeamId,
 } from "../engine/index.ts";
+import { targetHex, shapeOff, stepTowards } from "./shape.ts";
 
 /** P(a + d6 > d + d6) and P(tie). */
 export function duelOdds(a: number, d: number): { win: number; tie: number } {
@@ -68,14 +69,19 @@ export function passOdds(s: State, p: Player, to: number) {
 /** The PHY edge in duels: +1 for the physically stronger of the two. */
 const edge = (a: Player, b: Player) => (a.st.phy > b.st.phy ? 1 : 0);
 
-export interface Option { kind: string; cmd: string; text: string; score: number }
+export interface Option {
+  kind: string; cmd: string; text: string; score: number;
+  to?: number;   // the spot it ends up on (attacking options)
+  p?: number;    // the chance it works
+  by?: string;   // the player who ends up on `to` with the ball
+}
 
 /**
  * The side to move's most useful options, best first within each kind.
  * score is a rough value used only for ordering: chance of success weighted by
  * how much closer it gets the ball to goal.
  */
-export function analyze(s: State): { summary: string; options: Option[] } {
+export function analyze(s: State): { summary: string; options: Option[]; all: Option[] } {
   const team = s.turn, c = carrier(s), opts: Option[] = [];
   const mine = s.players.filter(p => p.team === team);
   const bh = s.ball.hex;
@@ -93,7 +99,7 @@ export function analyze(s: State): { summary: string; options: Option[] } {
         goal = o.win; save = `keeper ${gd === 0 ? "on that spot" : "next to it"}`;
       }
       const p = lane.safe * goal;
-      opts.push({ kind: "shot", cmd: `#${c.num}>>${hexName(g)}`, score: p * 10,
+      opts.push({ kind: "shot", cmd: `#${c.num}>>${hexName(g)}`, score: p * 10, to: g, p, by: c.id,
         text: `shot #${c.num}>>${hexName(g)}: GOAL ${pct(p)} (${save}${lane.threats.length ? `; lane: ${lane.threats.join(", ")}` : ""})` });
     }
     // Passes to feet
@@ -103,7 +109,7 @@ export function analyze(s: State): { summary: string; options: Option[] } {
       let keep = lane.safe;
       if (opp.length) keep *= duelOdds(m.st.dri + edge(m, opp[0]), opp[0].st.def + majority(s, h, opp[0].team) + edge(opp[0], m)).win;
       const g1 = goalDist(team, h);
-      opts.push({ kind: "pass", cmd: `#${c.num}>#${m.num}`, score: keep * (g0 - g1 + 1),
+      opts.push({ kind: "pass", cmd: `#${c.num}>#${m.num}`, score: keep * (g0 - g1 + 1), to: h, p: keep, by: m.id,
         text: `pass #${c.num}>#${m.num} (to spot ${hexName(h)}, ${g1} from goal, ${g0 - g1 >= 0 ? "+" : ""}${g0 - g1}): arrives ${pct(keep)}${lane.threats.length ? `; lane: ${lane.threats.join(", ")}` : ""}${opp.length ? `; marked by ${opp.map(x => x.id).join(" ")}` : ""}` });
     }
     // Through balls: an empty spot closer to goal that a teammate can reach this turn after the pass
@@ -119,7 +125,7 @@ export function analyze(s: State): { summary: string; options: Option[] } {
       if (!best) continue;
       const pounce = s.players.filter(x => x.team !== team && x.reserve > 0 && hexDist(hexOf(x), h) <= 1).map(x => x.id);
       const ok = lane.safe * (pounce.length ? 0.1 : 1);
-      opts.push({ kind: "through", cmd: `#${c.num}>${hexName(h)} then #${best.p.num}-${hexName(h)}`, score: ok * (g0 - goalDist(team, h) + 1) * 0.9,
+      opts.push({ kind: "through", cmd: `#${c.num}>${hexName(h)} then #${best.p.num}-${hexName(h)}`, score: ok * (g0 - goalDist(team, h) + 1) * 0.9, to: h, p: ok, by: best.p.id,
         text: `through ball #${c.num}>${hexName(h)} (${goalDist(team, h)} from goal), then #${best.p.num}-${hexName(h)} for ${best.k} AP: lane ${pct(lane.safe)}${pounce.length ? `; DANGER reserves ${pounce.join(" ")} will pounce on it` : ""}` });
     }
     // Dribbles: spots closer to goal, with the chance of getting through every duel on the way
@@ -143,7 +149,7 @@ export function analyze(s: State): { summary: string; options: Option[] } {
     }
     for (const [h, { seg, k, p }] of bestBySpot) {
       const g1 = goalDist(team, h);
-      opts.push({ kind: "dribble", cmd: `#${c.num}-${segName(seg)}`, score: p * (g0 - g1) * 1.1,
+      opts.push({ kind: "dribble", cmd: `#${c.num}-${segName(seg)}`, score: p * (g0 - g1) * 1.1, to: h, p, by: c.id,
         text: `dribble #${c.num}-${segName(seg)} (${k} AP, to spot ${hexName(h)}, ${g1} from goal): keeps it ${pct(p)}` });
     }
     // Runs: teammates moving into open space ahead of the ball, within passing range
@@ -230,8 +236,25 @@ export function analyze(s: State): { summary: string; options: Option[] } {
     }
   }
 
+  // Shape: moves that bring players towards their target spots in the formation's mid-game shape.
+  // Worth more the further the side is out of shape, and early in each half (after kick-offs).
+  const off = shapeOff(s, team), half = Math.floor(s.maxTurns / 2);
+  const intoHalf = s.turnNo <= half ? s.turnNo : s.turnNo - half;
+  // Only with the ball: the target shapes are attacking shapes, and pushing up without it opens gaps.
+  // (Measured: shape moves without the ball made the advisor lose to one without them.)
+  const weight = (off > 10 ? 1.4 : off > 4 ? 1 : 0.6) * (intoHalf <= 6 ? 1.3 : 1);
+  if (c && c.team === team) for (const m of mine) {
+    if (m.role === "GK" || m.id === s.ball.owner) continue;
+    const t = targetHex(s, m), d0 = hexDist(hexOf(m), t);
+    if (d0 === 0) continue;
+    const st = stepTowards(s, m, t);
+    if (!st) continue;
+    opts.push({ kind: "shape", cmd: `#${m.num}-${segName(st.seg)}`, score: 0.5 * (d0 - st.d) * weight - 0.15 * st.cost,
+      text: `shape #${m.num}-${segName(st.seg)} (${m.role}, ${st.cost} AP): ${d0} → ${st.d} spots from his target spot ${hexName(t)}` });
+  }
+
   const top: Option[] = [];
-  for (const kind of ["shot", "pass", "through", "dribble", "run", "double", "press", "block", "reserve", "loose"]) {
+  for (const kind of ["shot", "pass", "through", "dribble", "run", "double", "press", "block", "shape", "reserve", "loose"]) {
     top.push(...opts.filter(o => o.kind === kind).sort((a, b) => b.score - a.score || a.cmd.localeCompare(b.cmd)).slice(0, kind === "shot" ? 3 : 5));
   }
   const best = opts.slice().sort((a, b) => b.score - a.score)[0];
@@ -240,6 +263,6 @@ export function analyze(s: State): { summary: string; options: Option[] } {
       ? `You have the ball: #${c.num} on spot ${hexName(bh)}, ${goalDist(team, bh)} spots from the goal you attack.`
       : `They have the ball: ${c.id} on spot ${hexName(bh)}, ${ownGoalDist(team, bh)} spots from your goal.`
     : `The ball is loose on spot ${hexName(bh)}.`;
-  return { summary: summary + (best ? ` Highest-value option: ${best.cmd}.` : ""), options: top };
+  return { summary: summary + (best ? ` Highest-value option: ${best.cmd}.` : ""), options: top, all: opts };
 }
 

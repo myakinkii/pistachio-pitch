@@ -129,3 +129,27 @@ export function influenceSvg(s: State): string {
   }
   return h;
 }
+
+/**
+ * A heat map as soft glows centred on the spots, in a side's colour: the
+ * stronger the heat, the more opaque. The top `rank` spots get a white ring and
+ * their rank, matching the focal points listed in words.
+ */
+export function heatSvg(m: Map<number, { v: number }>, team: TeamId, rot: number, rank = 3): string {
+  const col = team === "K" ? KIT.K2 : KIT.S2, id = `heat-${team}`;
+  let h = `<defs><radialGradient id="${id}"><stop offset="0" stop-color="${col}" stop-opacity="0.95"/><stop offset="0.55" stop-color="${col}" stop-opacity="0.55"/><stop offset="1" stop-color="${col}" stop-opacity="0"/></radialGradient></defs>`;
+  // only the hottest spots glow, so the focal points stand out
+  const list = [...m.entries()].filter(([, x]) => x.v >= 0.1).sort((a, b) => b[1].v - a[1].v || a[0] - b[0]).slice(0, 10);
+  const top = list.length ? list[0][1].v : 1;
+  for (const [hex, x] of list) {
+    const c = centre(hex), o = 0.35 + 0.6 * Math.min(1, x.v / top);
+    h += `<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${(R * 1.15).toFixed(1)}" fill="url(#${id})" opacity="${o.toFixed(2)}"/>`;
+  }
+  list.slice(0, rank).forEach(([hex], i) => {
+    const c = centre(hex);
+    h += `<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${(R * .62).toFixed(1)}" fill="none" stroke="#fff" stroke-width="3"/>` +
+      `<circle cx="${(c.x + R * .5).toFixed(1)}" cy="${(c.y - R * .5).toFixed(1)}" r="9" fill="#fff" stroke="${col}" stroke-width="2"/>` +
+      `<text x="${(c.x + R * .5).toFixed(1)}" y="${(c.y - R * .5 + 4).toFixed(1)}" text-anchor="middle" font-size="11" font-weight="700" fill="${col}"${upright(rot, c.x + R * .5, c.y - R * .5)}>${i + 1}</text>`;
+  });
+  return h;
+}

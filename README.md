@@ -85,7 +85,11 @@ short playbook (with the ball, progress every turn and shoot when the odds are
 decent; without it, press and tackle, then reserves), the position, and its
 options worked out with exact odds from the dice: shots with the chance of a
 goal, passes and through balls with the chance they arrive, dribbles with the
-chance of keeping the ball, runs into space, tackles. It also gets a default plan: the
+chance of keeping the ball, runs into space, tackles. A briefing
+(`src/ai/briefing.ts`) adds what the formation lab shows, in words: its shape
+and the moves that rebuild it, the threat focal points (where its attack can
+strike, where the opponent's can, and who covers each danger spot), and its
+territory and tempo. It also gets a default plan: the
 turn the advisor would play, simulated on different dice so it reveals nothing
 about the real rolls. It answers with a plan for the whole turn as commands,
 plus a one-line idea shown after its turn; if the plan leaves AP unused, it gets

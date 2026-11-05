@@ -30,6 +30,7 @@ export function shapes(fK: string, fS: string, shape: Record<TeamId, Shape> = { 
       s.players.find(p => p.team === team && p.num === i + 1)!.seg = hexAt(mq, mr)! * 6 + (team === "K" ? 1 : 4);
     });
   }
+  s.ball = { hex: s.ball.hex, owner: null };   // a shape, not a kick-off: nobody on the ball
   return s;
 }
 

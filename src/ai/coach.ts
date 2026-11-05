@@ -12,6 +12,7 @@ import {
 } from "../engine/index.ts";
 import { analyze, goalDist } from "./odds.ts";
 import { suggestTurn } from "./advisor.ts";
+import { briefing } from "./briefing.ts";
 
 export type Ask = (prompt: string) => Promise<string | unknown>;
 
@@ -75,6 +76,19 @@ Without the ball:
   forwards, and keep the forwards (#10, #11) higher up the pitch, ready for the counter.
 - Put leftover AP on reserves for players next to the ball and in front of your goal: they press his
   next dribble, stretch for passes, and pounce on loose balls. Reserves are how you defend in his turn.
+Reading the briefing (SHAPE, THREATS, TERRITORY below the options):
+- SHAPE: your formation's target shape is where your players do their best work, and building it is
+  how you create passing options for the next turns. Every turn, put the AP you don't need for the
+  ball into shape moves (they're in your options and the default plan), most of all early in each
+  half and after a kick-off. A punt into the box with nobody in position is usually a wasted turn.
+  Don't break the lines: defenders behind midfielders behind forwards.
+- THREATS with the ball: aim the turn at your ball-threat focal points (they are where your options
+  end up, weighted by their odds and the chance to score from there). If you lose it, the opponent's
+  focal points are where they strike: keep a defender or a reserve near them.
+- THREATS without the ball: cover their ball-threat focal points first, using the covering moves
+  listed, then put reserves next to their carrier and in front of your goal.
+- TERRITORY: more control and more empty spots reached first means more passing options. A short,
+  safe chain from the ball to their box is a chance to strike this turn.
 Always:
 - Use all your AP. Ending a turn early throws AP away; if nothing else is useful, reserves are.
 - Late in the match, if you're behind, attack with more players; if you're ahead, keep it safe.`;
@@ -100,6 +114,7 @@ export function options(s: State): string {
   const head: Record<string, string> = {
     shot: "Shots", pass: "Passes to feet", through: "Through balls into space", dribble: "Dribbles forward",
     run: "Runs into space (to receive a pass next)", press: "Win the ball back", reserve: "Reserves", loose: "Loose ball",
+    shape: "Shape: players back towards their target spots", double: "Double up", block: "Block the pass",
   };
   const lines = [summary, `Your players (formation ${s.formation[team]}):\n  ${roster}`];
   let last = "";
@@ -134,6 +149,8 @@ ${describe(s)}
 
 === YOUR OPTIONS ===
 ${options(s)}
+
+${briefing(s)}
 
 === A DEFAULT PLAN ===
 ${suggested(s)}

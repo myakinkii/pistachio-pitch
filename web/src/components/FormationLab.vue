@@ -9,8 +9,9 @@ import {
 } from "../../../src/engine/index.ts";
 import { chain } from "../../../src/ai/tempo.ts";
 import { analyze, passOdds, pct } from "../../../src/ai/odds.ts";
+import { ballThreat, teamThreat, focal, type HeatMap } from "../../../src/ai/threat.ts";
 import { reach, passTargets, playerById } from "../../../src/engine/index.ts";
-import { DEFS, BALL, staticBoard, viewBox, pieceSvg, controlSvg, influenceSvg, ballTransform, centre, segPts, segCentroid, upright, playerName, R, HH } from "../lib/draw.ts";
+import { DEFS, BALL, staticBoard, viewBox, pieceSvg, controlSvg, influenceSvg, heatSvg, ballTransform, centre, segPts, segCentroid, upright, playerName, R, HH } from "../lib/draw.ts";
 import { store, prefs } from "../lib/game.ts";
 
 type Draft = Record<string, { style: string; players: { pos: string; kickoff: number; target: number }[] }>;
@@ -23,7 +24,8 @@ function fromEngine(): Draft {
 }
 const draft = reactive<Draft>(fromEngine());
 const edited = ref(false);
-const pick = reactive({ K: "4-4-2", S: "5-4-1", mode: "target" as "target" | "kickoff", numbers: true, ball: false, influence: true });
+const pick = reactive({ K: "4-4-2", S: "5-4-1", mode: "target" as "target" | "kickoff", numbers: true, ball: false, influence: false,
+  heat: "team" as "off" | "ball" | "team" | "counter" });
 const ballAt = ref<string | null>(null);   // who has the ball ("K10"), with the Ball tool
 const preview = ref<number | null>(null);  // pass target under the pointer
 const sel = ref<string | null>(null);   // "K7"
@@ -43,6 +45,7 @@ const state = computed(() => {
   // the ball at a player's feet makes his side the one to move, with a full turn of AP
   const c = ballAt.value ? playerById(s, ballAt.value) : undefined;
   if (c) { s.ball = { hex: segHex(c.seg), owner: c.id }; s.turn = c.team; s.ap = s.apPerTurn; }
+  else s.ball = { hex: s.ball.hex, owner: null };
   return s;
 });
 const carrierP = computed(() => (ballAt.value ? playerById(state.value, ballAt.value) : undefined));
@@ -82,6 +85,15 @@ const passText = computed(() => {
   return `Pass to spot ${spot}: arrives ${pct(o.arrive)}; ${lane}; ${end}.`;
 });
 /** The top options the coach and the advisor would see in this position. */
+/** The chosen heat map(s): ball threat and counter-threat need someone on the ball. */
+const heat = computed(() => {
+  const s = state.value, c = carrierP.value, maps: { team: TeamId; m: HeatMap; title: string }[] = [];
+  const name = (t: TeamId) => (t === "K" ? "Kernels" : "Shells");
+  if (pick.heat === "ball" && c) maps.push({ team: c.team, m: ballThreat(s), title: `Ball threat, ${playerName(c)}` });
+  else if (pick.heat === "team") (c ? [c.team] : (["K", "S"] as TeamId[])).forEach(t => maps.push({ team: t, m: teamThreat(s, t), title: `${name(t)} threat` }));
+  else if (pick.heat === "counter" && c) { const t: TeamId = c.team === "K" ? "S" : "K"; maps.push({ team: t, m: teamThreat(s, t), title: `Counter-threat if the ${name(t)} win it back` }); }
+  return maps.map(x => ({ ...x, svg: heatSvg(x.m, x.team, prefs.rot), focal: focal(x.m, 5) }));
+});
 const coachOptions = computed(() => (carrierP.value ? analyze(state.value).options.slice().sort((a, b) => b.score - a.score).slice(0, 8) : []));
 const staticHtml = computed(() => staticBoard(prefs.rot, true));
 const spotsHtml = computed(() => HEXES.map(h => {
@@ -177,6 +189,14 @@ async function copy() {
         <label class="ctl"><input type="radio" value="kickoff" v-model="pick.mode"> Kick-off</label>
         <label class="ctl"><input type="checkbox" v-model="pick.numbers"> Spot numbers</label>
         <label class="ctl" title="A lighter tint on the empty spots each side would get to first"><input type="checkbox" v-model="pick.influence"> Influence</label>
+        <label class="ctl">Heat
+          <select v-model="pick.heat" aria-label="Heat map">
+            <option value="off">Off</option>
+            <option value="ball" :disabled="!carrierP">Ball threat</option>
+            <option value="team">Team threat</option>
+            <option value="counter" :disabled="!carrierP">Counter-threat</option>
+          </select>
+        </label>
         <label class="ctl" title="Then click a pistachio to give him the ball"><input type="checkbox" v-model="pick.ball" @change="!pick.ball && (ballAt = null, preview = null)"> Ball</label>
       </div>
       <label class="ctl">Shells <select v-model="pick.S"><option v-for="n in FORMATION_NAMES" :key="n" :value="n">{{ n }}, {{ draft[n].style }}</option></select></label>
@@ -196,6 +216,7 @@ async function copy() {
         <g v-html="staticHtml" />
         <g v-if="pick.influence" v-html="influenceSvg(state)" />
         <g v-html="controlSvg(state)" />
+        <g v-for="h in heat" :key="h.title" v-html="h.svg" pointer-events="none" />
         <g v-html="spotsHtml" />
         <g v-html="ballLayers.lo" />
         <g v-html="piecesHtml" />
@@ -206,6 +227,14 @@ async function copy() {
     <p class="small" aria-live="polite">
       {{ note || passText || (pick.ball && !carrierP ? "Click a pistachio to give him the ball." : carrierP ? `${playerName(carrierP)} has the ball: segments show where he can dribble and what it costs; hover a ring to see a pass or shot.` : "") || (sel ? "Now click the spot to move him to (a teammate already there swaps places)." : counts.shared ? `${counts.shared} spot${counts.shared > 1 ? "s are" : " is"} shared: the split segments are contested ground.` : "Click a pistachio, then a spot, to move him. Positions are written from the Kernels’ side; the Shells mirror them.") }}
     </p>
+    <div v-if="heat.length" class="lab-options">
+      <template v-for="h in heat" :key="h.title">
+        <p class="log-head">{{ h.title }}: focal points</p>
+        <ol v-if="h.focal.length"><li v-for="f in h.focal" :key="f.hex">spot {{ HEXES[f.hex].num }}: {{ f.why }}</li></ol>
+        <p v-else class="small">No danger anywhere this turn.</p>
+      </template>
+    </div>
+    <p v-if="(pick.heat === 'ball' || pick.heat === 'counter') && !carrierP" class="small">Ball threat and counter-threat need someone on the ball: tick Ball and click a pistachio.</p>
     <div v-if="coachOptions.length" class="lab-options">
       <p class="log-head">What the coach would see</p>
       <ol><li v-for="o in coachOptions" :key="o.cmd + o.kind">{{ o.text }}</li></ol>
