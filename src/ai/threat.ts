@@ -59,7 +59,7 @@ export function ballThreat(s: State): HeatMap {
     const v = o.kind === "shot" ? o.p : o.p * danger(s, c.team, o.to, who.st.sho);
     const what = o.kind === "shot" ? `shot by ${shortName(c)}, goal ${pctOf(o.p)}`
       : o.kind === "pass" ? `pass to ${shortName(who)}, arrives ${pctOf(o.p)}`
-      : o.kind === "through" ? `through ball for ${shortName(who)}, lane ${pctOf(o.p)}`
+      : o.kind === "through" ? `through ball for ${shortName(who)}, gets there ${pctOf(o.p)}`
       : `${shortName(c)} dribbles there, keeps it ${pctOf(o.p)}`;
     add(m, o.to, v, what);
   }

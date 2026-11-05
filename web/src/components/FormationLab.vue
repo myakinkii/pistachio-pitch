@@ -82,7 +82,7 @@ const passText = computed(() => {
   const end = o.mates.length && o.opps.length ? `${who(o.mates[0])} has to win it against ${o.opps.map(who).join(", ")}`
     : o.opps.length ? `${o.opps.map(who).join(", ")} stands there and wins it`
     : o.mates.length ? `${who(o.mates[0])} receives it` : "nobody there: a through ball into space";
-  return `Pass to spot ${spot}: arrives ${pct(o.arrive)}; ${lane}; ${end}.`;
+  return `Pass to spot ${spot}: arrives ${pct(o.arrive)} (on target ${pct(o.acc)}; off target it scatters one or two spots); ${lane}; ${end}.`;
 });
 /** The top options the coach and the advisor would see in this position. */
 /** The chosen heat map(s): ball threat and counter-threat need someone on the ball. */

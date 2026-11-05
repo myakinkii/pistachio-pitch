@@ -33,7 +33,9 @@ Each turn your side has a pool of action points (AP) to spend on any players:
   with each (dribbling vs tackling); a tie stops him, losing means he's dispossessed.
   Walking into a loose ball picks it up. The ball travels faster than legs: pass to progress.
 - #N>#M passes to teammate M's feet; #N>58 passes into space (spot 58); #N>>113 shoots at a goal spot.
-  1 AP. Range ${PASS_RANGE} spots. Each opponent in the lane may cut it out (roll); opponents on the
+  1 AP. Range ${PASS_RANGE} spots. Passes can go astray: PAS + d6 must reach 2 + the length in spots,
+  or the ball lands one or two spots off in a random direction, so short passes are safer than long
+  ones and good passers (PAS 4-5) should hit the long balls. Each opponent in the lane may cut it out (roll); opponents on the
   target spot contest the reception; an empty target leaves the ball loose there. The keeper saves
   shots aimed at or next to his spot, so aim away from him.
 - #Nx#M: player N tackles opponent M, who has the ball. N must stand in the ball's spot. 1 AP. Winning takes the ball; a tie knocks it loose; losing means N can't tackle

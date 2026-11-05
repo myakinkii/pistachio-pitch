@@ -31,6 +31,7 @@ export function commentary(events: Ev[], before: State, after: State): Line[] {
       case "beaten": out.push({ text: `${who(e.pid)} is beaten…` }); break;
       case "intercept": out.push({ text: e.react ? `${who(e.pid)} stretches and cuts it out!` : `${who(e.pid)} reads it and intercepts.` }); break;
       case "react": out.push({ text: `${who(e.pid)} springs from reserve.` }); break;
+      case "astray": out.push({ text: `${who(e.pid)}’s pass runs astray, to spot ${HEXES[e.hex].num}.` }); break;
       case "duel":
         if (e.kind === "dribble" || e.kind === "press") {
           out.push({ text: e.out === "win" ? `${who(e.att)} skips past ${who(e.def)}.` : e.out === "tie" ? `${who(e.def)} holds ${who(e.att)} up.` : `${who(e.def)} wins it off ${who(e.att)}.` });

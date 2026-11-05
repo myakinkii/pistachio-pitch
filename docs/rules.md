@@ -1,6 +1,6 @@
-# Rules (version 0.3)
+# Rules (version 0.4)
 
-The rules version is written into every match file (`[Rules "0.3"]`). Change it
+The rules version is written into every match file (`[Rules "0.4"]`). Change it
 whenever a change makes old matches play out differently, so old files are
 refused instead of silently replaying wrong.
 
@@ -90,6 +90,12 @@ the contest happens.
 - **Tackle** (`x`): tackler in the ball's spot: DEF + d6 + majority against
   DRI + d6. Win: takes the ball. Tie: the ball is loose in that spot. Lose:
   that player can't tackle again this turn.
+- **Accuracy** (passes, not shots): PAS + d6 against 2 + the pass's length in
+  spots. Reach it and the ball goes where it was aimed. Miss, and roll a d6 for
+  the direction, read as the segment letters (1 = a, the top, clockwise to
+  6 = f): the ball lands one spot that way, or two if it missed by 3 or more.
+  It stops at the edge of the pitch (it never runs into a goal). The rest of
+  the pass is then played to where it really lands.
 - **Pass and shot**: every opponent in the lane (standing close to the line from
   the ball's spot to the target, past the first twentieth of it), nearest first:
   DEF + d6 (keepers use KEE against shots) against PAS (or SHO) + d6 + 1,
@@ -125,6 +131,13 @@ substitutions; live reactions (quick-time decisions).
 
 ## Changes
 
+- **0.4**: pass accuracy. Every pass rolls PAS + d6 against 2 + its length;
+  a miss scatters it one or two spots in a d6 direction (a to f). Short passes
+  between well-placed teammates are reliable, long balls are a gamble, and PAS
+  matters beyond beating interceptions. Measured over advisor matches against
+  0.3: passes received per attack doubled (0.73 to 1.53), passes of 4+ spots
+  fell from 75% to about 40%, about 16% of passes go astray, 2.8 goals a match.
+  (3 + length was also tried: 25% astray, 1.9 goals a match, shorter attacks.)
 - **0.3**: player stats (PAC SHO PAS DRI DEF PHY, plus KEE for keepers; 18
   points each), formations (4-4-2, 4-3-3, 5-4-1, 3-5-2) with builds by position,
   the pace cap (1 + PAC spots per turn) and the PHY edge in duels.

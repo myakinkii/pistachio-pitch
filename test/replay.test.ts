@@ -26,7 +26,7 @@ test("replaying a match file rebuilds every state and verifies results", () => {
 
 test("a tampered result is caught", () => {
   const text = selfplay("tamper", { turns: 10 }).toText();
-  const bad = text.replace(/\{=K(\d+)\}/, "{=K99}");
+  const bad = text.replace(/\{[^}]+\}/, "{=K99}");   // tamper with the first recorded result
   assert.notEqual(bad, text);
   assert.throws(() => Match.fromText(bad, { verify: true }), NotationError);
   assert.doesNotThrow(() => Match.fromText(bad));        // without verify, results are just comments

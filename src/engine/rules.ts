@@ -12,14 +12,14 @@
 // Losing the ball through your own action is a turnover and ends your turn.
 
 import {
-  HEXES, CENTER, GOAL, attackGoal, other, hexAt,
+  HEXES, CENTER, GOAL, attackGoal, other, hexAt, HEX_NBR, LETTERS,
   segHex, segExists, segIsGoal, hexSegs, hexDist, hexNbrs, cx, cy, segX, segY,
   segName, hexName, type TeamId,
 } from "./geometry.ts";
 import { Dice, seedState } from "./rng.ts";
 import { FORMATIONS, BUILDS, DEFAULT_FORMATION, mirror, type Stats } from "./squad.ts";
 
-export const RULES_VERSION = "0.3";
+export const RULES_VERSION = "0.4";
 export const PASS_RANGE = 5;
 export const MAX_RESERVE = 2;
 
@@ -60,6 +60,7 @@ export type Ev =
   | { e: "pickup"; pid: string; hex: number }
   | { e: "intercept"; pid: string; a: number; d: number; react: boolean }
   | { e: "lane"; pid: string; a: number; d: number; react: boolean }   // a lane threat that failed
+  | { e: "astray"; pid: string; a: number; need: number; dir: string; hex: number }   // an inaccurate pass, and where it went
   | { e: "received"; pid: string }
   | { e: "loose"; hex: number }
   | { e: "lost"; pid: string }
@@ -426,8 +427,25 @@ function looseReactions(s: State, dice: Dice, ev: Ev[]) {
 }
 
 /** A pass or a shot from the ball's spot to hex `to`. */
-function kick(s: State, p: Player, to: number, shot: boolean, toNum: number | undefined, dice: Dice, ev: Ev[]) {
-  const from = s.ball.hex, dist = hexDist(from, to);
+/** Scatter directions for a d6: 1 = a (top), then clockwise to 6 = f, as segment numbers k. */
+const SCATTER_K = [4, 5, 0, 1, 2, 3];
+/** The accuracy roll a pass needs: PAS + d6 must reach 2 + its length in spots. */
+export const passNeed = (dist: number) => 2 + dist;
+
+function kick(s: State, p: Player, aim: number, shot: boolean, toNum: number | undefined, dice: Dice, ev: Ev[]) {
+  const from = s.ball.hex;
+  // Accuracy (passes only): PAS + d6 against 2 + the length. A miss scatters the ball one spot in a
+  // rolled direction, or two if it missed by 3 or more; it stops at the edge of the pitch.
+  let to = aim;
+  if (!shot) {
+    const need = passNeed(hexDist(from, aim)), a = p.st.pas + dice.roll();
+    if (a < need) {
+      const k = SCATTER_K[dice.roll() - 1], steps = need - a >= 3 ? 2 : 1;
+      for (let i = 0; i < steps; i++) { const n = HEX_NBR[to][k]; if (n === undefined || HEXES[n].kind !== "field") break; to = n; }
+      ev.push({ e: "astray", pid: p.id, a, need, dir: LETTERS[k], hex: to });
+    }
+  }
+  const dist = hexDist(from, to);
   const skill = shot ? p.st.sho : p.st.pas;
   // Opponents in the lane, nearest first. Reserves just off the lane stretch for it, a little worse.
   for (const { p: x, react } of laneThreats(s, p.team, from, to)) {

@@ -60,6 +60,7 @@ export function formatEvents(ev: Ev[]): string {
       case "pickup": out.push(`@${e.pid}`); break;
       case "intercept": out.push(`*${e.pid} ${e.a}:${e.d}${e.react ? " r" : ""}`); break;
       case "lane": out.push(`${e.pid} ${e.a}:${e.d} missed${e.react ? " r" : ""}`); break;
+      case "astray": out.push(`astray ${e.a}:${e.need} ${e.dir}>${hexName(e.hex)}`); break;
       case "received": out.push(`=${e.pid}`); break;
       case "loose": out.push(`~${hexName(e.hex)}`); break;
       case "lost": out.push(`!${e.pid}`); break;

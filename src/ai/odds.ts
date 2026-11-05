@@ -10,6 +10,7 @@ import {
   reach, passTargets, laneThreats, inHex, carrier, hexOf,
   type State, type Player, type TeamId,
 } from "../engine/index.ts";
+import { passNeed } from "../engine/index.ts";
 import { targetHex, shapeOff, stepTowards } from "./shape.ts";
 
 /** P(a + d6 > d + d6) and P(tie). */
@@ -27,8 +28,20 @@ export const goalDist = (team: TeamId, h: number) => Math.min(...attackGoal(team
 export const ownGoalDist = (team: TeamId, h: number) => Math.min(...GOAL[team].map(g => hexDist(h, g)));
 
 /** Chance a ball from `from` to `to` gets past every opponent in (or near) the lane. */
-export function laneSafety(s: State, p: Player, from: number, to: number, shot: boolean): { safe: number; threats: string[] } {
+/** The chance a pass of `dist` spots by a player with passing `pas` lands where it's aimed (rules 0.4). */
+export function accuracy(pas: number, dist: number): number {
+  const x = passNeed(dist) - pas;           // the d6 needs at least x
+  return Math.max(0, Math.min(1, (7 - x) / 6));
+}
+
+/**
+ * The chance a pass (or shot) gets to spot `to`: for passes, accuracy (it lands where it's aimed)
+ * times getting past every opponent in the lane. Stray passes are counted as lost: sometimes a
+ * teammate picks one up, so this errs on the safe side. `clear` is the lane part alone.
+ */
+export function laneSafety(s: State, p: Player, from: number, to: number, shot: boolean): { safe: number; threats: string[]; acc: number; clear: number } {
   const dist = hexDist(from, to), skill = shot ? p.st.sho : p.st.pas;
+  const acc = shot ? 1 : accuracy(p.st.pas, dist);
   let safe = 1;
   const threats: string[] = [];
   for (const { p: x, react } of laneThreats(s, p.team, from, to)) {
@@ -38,7 +51,7 @@ export function laneSafety(s: State, p: Player, from: number, to: number, shot: 
     safe *= 1 - cut;
     threats.push(`${x.id}${react ? "(reserve)" : ""} ${pct(cut)}`);
   }
-  return { safe, threats };
+  return { safe: safe * acc, threats, acc, clear: safe };
 }
 
 export const pct = (x: number) => `${Math.round(x * 100)}%`;
@@ -64,7 +77,7 @@ export function passOdds(s: State, p: Player, to: number) {
   } else if (opps.length && mates.length) {
     arrive *= duelOdds(mates[0].st.dri + edge(mates[0], opps[0]), opps[0].st.def + majority(s, to, opps[0].team) + edge(opps[0], mates[0])).win;
   } else if (opps.length) arrive = 0;
-  return { shot, lane: lane.safe, threats: lane.threats, arrive, goal, keeper, mates: mates.map(x => x.id), opps: opps.map(x => x.id) };
+  return { shot, lane: lane.clear, acc: lane.acc, threats: lane.threats, arrive, goal, keeper, mates: mates.map(x => x.id), opps: opps.map(x => x.id) };
 }
 /** The PHY edge in duels: +1 for the physically stronger of the two. */
 const edge = (a: Player, b: Player) => (a.st.phy > b.st.phy ? 1 : 0);
@@ -110,7 +123,7 @@ export function analyze(s: State): { summary: string; options: Option[]; all: Op
       if (opp.length) keep *= duelOdds(m.st.dri + edge(m, opp[0]), opp[0].st.def + majority(s, h, opp[0].team) + edge(opp[0], m)).win;
       const g1 = goalDist(team, h);
       opts.push({ kind: "pass", cmd: `#${c.num}>#${m.num}`, score: keep * (g0 - g1 + 1), to: h, p: keep, by: m.id,
-        text: `pass #${c.num}>#${m.num} (to spot ${hexName(h)}, ${g1} from goal, ${g0 - g1 >= 0 ? "+" : ""}${g0 - g1}): arrives ${pct(keep)}${lane.threats.length ? `; lane: ${lane.threats.join(", ")}` : ""}${opp.length ? `; marked by ${opp.map(x => x.id).join(" ")}` : ""}` });
+        text: `pass #${c.num}>#${m.num} (to spot ${hexName(h)}, ${g1} from goal, ${g0 - g1 >= 0 ? "+" : ""}${g0 - g1}): arrives ${pct(keep)} (on target ${pct(lane.acc)})${lane.threats.length ? `; lane: ${lane.threats.join(", ")}` : ""}${opp.length ? `; marked by ${opp.map(x => x.id).join(" ")}` : ""}` });
     }
     // Through balls: an empty spot closer to goal that a teammate can reach this turn after the pass
     for (const h of [...targets].filter(x => HEXES[x].kind === "field" && inHex(s, x).length === 0 && goalDist(team, x) < g0)) {
@@ -126,7 +139,7 @@ export function analyze(s: State): { summary: string; options: Option[]; all: Op
       const pounce = s.players.filter(x => x.team !== team && x.reserve > 0 && hexDist(hexOf(x), h) <= 1).map(x => x.id);
       const ok = lane.safe * (pounce.length ? 0.1 : 1);
       opts.push({ kind: "through", cmd: `#${c.num}>${hexName(h)} then #${best.p.num}-${hexName(h)}`, score: ok * (g0 - goalDist(team, h) + 1) * 0.9, to: h, p: ok, by: best.p.id,
-        text: `through ball #${c.num}>${hexName(h)} (${goalDist(team, h)} from goal), then #${best.p.num}-${hexName(h)} for ${best.k} AP: lane ${pct(lane.safe)}${pounce.length ? `; DANGER reserves ${pounce.join(" ")} will pounce on it` : ""}` });
+        text: `through ball #${c.num}>${hexName(h)} (${goalDist(team, h)} from goal), then #${best.p.num}-${hexName(h)} for ${best.k} AP: gets there ${pct(lane.safe)} (on target ${pct(lane.acc)})${pounce.length ? `; DANGER reserves ${pounce.join(" ")} will pounce on it` : ""}` });
     }
     // Dribbles: spots closer to goal, with the chance of getting through every duel on the way
     const { cost, path: pathTo } = reach(s, c, Math.max(1, s.ap - 1));
